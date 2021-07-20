@@ -63,9 +63,11 @@ func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{}
 
 	// Your code here.
-/*
-1. 
- */
+
+	// 1. 切成16MB-64MB的文件
+
+	// 2. 创建任务副本
+
 
 	m.server()
 	return &m
