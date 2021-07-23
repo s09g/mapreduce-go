@@ -22,6 +22,19 @@ type ExampleReply struct {
 	Y int
 }
 
+type TaskMeta struct {
+	filename string
+	status TaskStatus
+}
+
+type TaskStatus int
+
+const (
+	MapTask TaskStatus = iota
+	ReduceTask
+	NoTask
+)
+
 // Add your RPC definitions here.
 
 
