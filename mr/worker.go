@@ -61,6 +61,14 @@ func CallExample() {
 	fmt.Printf("reply.Y %v\n", reply.Y)
 }
 
+// 5. master给worker分配任务
+func getTask() TaskMeta {
+	args := ExampleArgs{}
+	reply := TaskMeta{}
+	call("Master.AssignTask", &args, &reply)
+	return reply
+}
+
 //
 // send an RPC request to the master, wait for the response.
 // usually returns true.
