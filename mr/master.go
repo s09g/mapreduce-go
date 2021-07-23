@@ -15,10 +15,6 @@ type Master struct {
 	MapTaskQueue *list.List
 }
 
-type MapTask struct {
-	filename string
-	status string
-}
 
 // Your code here -- RPC handlers for the worker to call.
 
@@ -78,14 +74,13 @@ func MakeMaster(files []string, nReduce int) *Master {
 	// 2. 创建任务副本
 	m.MapTaskQueue = list.New()
 	for _, filename := range files {
-		m.MapTaskQueue.PushBack(MapTask{
+		m.MapTaskQueue.PushBack(TaskMeta{
 			filename: filename,
-			status: "Waiting",
+			status: MapTask,
 		})
 	}
 
 	// 3. 一个程序成为master，其他成为worker
-
 	m.server()
 	return &m
 }
