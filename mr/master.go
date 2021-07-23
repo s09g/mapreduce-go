@@ -1,6 +1,9 @@
 package mr
 
-import "log"
+import (
+	"container/list"
+	"log"
+)
 import "net"
 import "os"
 import "net/rpc"
@@ -9,7 +12,12 @@ import "net/http"
 
 type Master struct {
 	// Your definitions here.
+	MapTaskQueue *list.List
+}
 
+type MapTask struct {
+	filename string
+	status string
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -62,12 +70,21 @@ func (m *Master) Done() bool {
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{}
 
+
 	// Your code here.
 
 	// 1. 切成16MB-64MB的文件
 
 	// 2. 创建任务副本
+	m.MapTaskQueue = list.New()
+	for _, filename := range files {
+		m.MapTaskQueue.PushBack(MapTask{
+			filename: filename,
+			status: "Waiting",
+		})
+	}
 
+	// 3. 一个程序成为master，其他成为worker
 
 	m.server()
 	return &m
