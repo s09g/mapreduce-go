@@ -32,6 +32,20 @@ func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
 	// Your worker implementation here.
+	//6. 获得task之后交给对应的worker job
+	for true {
+		task := getTask()
+		switch task.status {
+		case MapTask:
+			mapper(task, mapf)
+		case ReduceTask:
+			reducer()
+		case NoTask:
+			return
+		default:
+			return
+		}
+	}
 
 	// uncomment to send the Example RPC to the master.
 	// CallExample()
