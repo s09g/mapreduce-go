@@ -57,6 +57,17 @@ func Worker(mapf func(string, string) []KeyValue,
 
 }
 
+func mapper(task TaskMeta, mapf func(string, string) []KeyValue) []KeyValue {
+	log.Println("7. 获得map task,执行mapf")
+
+	content, err := ioutil.ReadFile(task.filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	intermediate := mapf(task.filename, string(content))
+
+}
+
 //
 // example function to show how to make an RPC call to the master.
 //
