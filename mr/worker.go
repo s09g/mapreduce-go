@@ -1,8 +1,11 @@
 package mr
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 )
 import "log"
 import "net/rpc"
@@ -40,7 +43,7 @@ func Worker(mapf func(string, string) []KeyValue,
 
 	for {
 		task := getTask()
-		switch task.status {
+		switch task.Status {
 		case MapTask:
 			mapper(task, mapf)
 		case ReduceTask:
@@ -60,13 +63,21 @@ func Worker(mapf func(string, string) []KeyValue,
 func mapper(task TaskMeta, mapf func(string, string) []KeyValue) []KeyValue {
 	log.Println("7. 获得map task,执行mapf")
 
-	content, err := ioutil.ReadFile(task.filename)
+	content, err := ioutil.ReadFile(task.Filename)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("fail to read file: " + task.Filename, err)
 	}
-	intermediate := mapf(task.filename, string(content))
+	intermediates := mapf(task.Filename, string(content))
+
+	log.Println("8.1 中间结果切分成R份（reducer数量）")
+	buffer := make([][] KeyValue, task.NReducer)
+	for _, intermediate := range intermediates {
+		slot := ihash(intermediate.Key) % task.NReducer
+		buffer[slot] = append(buffer[slot], intermediate)
+	}
 
 }
+
 
 //
 // example function to show how to make an RPC call to the master.
