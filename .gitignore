@@ -16,3 +16,4 @@
 mr-out*
 .run/
 *.xml
+test.sh
