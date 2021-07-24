@@ -74,10 +74,12 @@ func MakeMaster(files []string, nReduce int) *Master {
 	// 2. 创建任务副本
 	log.Println("2 创建任务副本")
 	m.MapTaskQueue = list.New()
-	for _, filename := range files {
+	for idx, filename := range files {
 		m.MapTaskQueue.PushBack(TaskMeta{
-			filename: filename,
-			status: MapTask,
+			Filename: filename,
+			Status:   MapTask,
+			NReducer: nReduce,
+			MapTaskNumber: idx,
 		})
 	}
 

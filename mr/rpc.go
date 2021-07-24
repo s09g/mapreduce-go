@@ -23,8 +23,10 @@ type ExampleReply struct {
 }
 
 type TaskMeta struct {
-	filename string
-	status TaskStatus
+	Filename string
+	Status   TaskStatus
+	NReducer int
+	MapTaskNumber int
 }
 
 type TaskStatus int
