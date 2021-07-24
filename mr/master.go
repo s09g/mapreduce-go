@@ -70,8 +70,9 @@ func MakeMaster(files []string, nReduce int) *Master {
 	// Your code here.
 
 	// 1. 切成16MB-64MB的文件
-
+	log.Println("1 make master")
 	// 2. 创建任务副本
+	log.Println("2 创建任务副本")
 	m.MapTaskQueue = list.New()
 	for _, filename := range files {
 		m.MapTaskQueue.PushBack(TaskMeta{
@@ -81,6 +82,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 	}
 
 	// 3. 一个程序成为master，其他成为worker
+	log.Println("3 启动server服务器")
 	m.server()
 	return &m
 }

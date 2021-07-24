@@ -1,6 +1,9 @@
 package mr
 
-import "fmt"
+import (
+	"fmt"
+	"io/ioutil"
+)
 import "log"
 import "net/rpc"
 import "hash/fnv"
@@ -33,13 +36,15 @@ func Worker(mapf func(string, string) []KeyValue,
 
 	// Your worker implementation here.
 	//6. 获得task之后交给对应的worker job
-	for true {
+	log.Println("6. 获得task之后交给对应的worker job")
+
+	for {
 		task := getTask()
 		switch task.status {
 		case MapTask:
 			mapper(task, mapf)
 		case ReduceTask:
-			reducer()
+			reducer(task, reducef)
 		case NoTask:
 			return
 		default:
@@ -77,6 +82,7 @@ func CallExample() {
 
 // 5. master给worker分配任务
 func getTask() TaskMeta {
+	log.Println("5. master给worker分配任务")
 	args := ExampleArgs{}
 	reply := TaskMeta{}
 	call("Master.AssignTask", &args, &reply)
