@@ -76,6 +76,30 @@ func mapper(task TaskMeta, mapf func(string, string) []KeyValue) []KeyValue {
 		buffer[slot] = append(buffer[slot], intermediate)
 	}
 
+	log.Println("8.2 中间结果写到本地磁盘")
+	mapOutput := make([] string, task.NReducer)
+	for i := 0; i < task.NReducer; i++ {
+		mapOutput = append(mapOutput, writeToLocalFile(task.MapTaskNumber, i, buffer[i]))
+
+	}
+}
+
+func writeToLocalFile(x int, y int, kvs []KeyValue) string {
+	dir, _ := os.Getwd()
+	tempFile, err := ioutil.TempFile(dir, "mr-tmp-*")
+	if err != nil {
+		log.Fatal("Fail to create temp file", err)
+	}
+	enc := json.NewEncoder(tempFile)
+	for _, kv := range kvs {
+		if err := enc.Encode(&kv); err != nil {
+			log.Fatal("fail to write kv pair", err)
+		}
+	}
+	outputName := fmt.Sprintf("mr-%d-%d", x, y)
+	os.Rename(tempFile.Name(), outputName)
+	tempFile.Close()
+	return filepath.Join(dir, outputName)
 }
 
 
