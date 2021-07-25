@@ -15,6 +15,10 @@ type Master struct {
 	// Your definitions here.
 	MapTaskQueue *list.List
 	MapTaskStatus map[int]MasterTaskStatus
+
+	ReduceTaskQueue *list.List
+	ReduceTaskStatus map[int]MasterTaskStatus
+
 }
 
 type MasterTaskStatus int
@@ -77,6 +81,8 @@ func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{
 		MapTaskQueue: list.New(),
 		MapTaskStatus: make(map[int] MasterTaskStatus),
+		ReduceTaskQueue: list.New(),
+		ReduceTaskStatus: make(map[int] MasterTaskStatus),
 	}
 
 
@@ -94,7 +100,12 @@ func MakeMaster(files []string, nReduce int) *Master {
 			MapTaskNumber: idx,
 		})
 	}
-
+	for i := 0; i < nReduce; i++ {
+		m.ReduceTaskQueue.PushBack(ReduceTaskMeta{
+			Status:           ReduceTask,
+			ReduceTaskNumber: i,
+		})
+	}
 	// 3. 一个程序成为master，其他成为worker
 	log.Println("3 启动server服务器")
 	m.server()

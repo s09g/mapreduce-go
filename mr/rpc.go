@@ -30,6 +30,13 @@ type TaskMeta struct {
 	MapOutput []string
 }
 
+type ReduceTaskMeta struct {
+	Filenames []string
+	Status   TaskStatus
+	ReduceTaskNumber int
+	ReduceOutput string
+}
+
 type TaskStatus int
 
 const (
