@@ -82,6 +82,16 @@ func mapper(task TaskMeta, mapf func(string, string) []KeyValue) {
 		mapOutput = append(mapOutput, writeToLocalFile(task.MapTaskNumber, i, buffer[i]))
 	}
 
+	log.Println("8.3 将R份文件位置发送给master")
+	task.MapOutput = mapOutput
+	MapTaskCompleted(task)
+}
+
+func MapTaskCompleted(task TaskMeta) {
+	log.Println("8.3 通知master map任务完成，将R份文件位置发送给master")
+	reply := TaskMeta{}
+	call("Master.MapTaskCompleted", &task, &reply)
+	return reply
 }
 
 func writeToLocalFile(x int, y int, kvs []KeyValue) string {

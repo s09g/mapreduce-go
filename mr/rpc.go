@@ -27,6 +27,7 @@ type TaskMeta struct {
 	Status   TaskStatus
 	NReducer int
 	MapTaskNumber int
+	MapOutput []string
 }
 
 type TaskStatus int
