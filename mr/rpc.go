@@ -22,7 +22,7 @@ type ExampleReply struct {
 	Y int
 }
 
-type TaskMeta struct {
+type MapTaskMeta struct {
 	Filename string
 	Status   TaskStatus
 	NReducer int

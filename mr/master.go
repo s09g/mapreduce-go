@@ -93,7 +93,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 	// 2. 创建任务副本
 	log.Println("2 创建任务副本")
 	for idx, filename := range files {
-		m.MapTaskQueue.PushBack(TaskMeta{
+		m.MapTaskQueue.PushBack(MapTaskMeta{
 			Filename: filename,
 			Status:   MapTask,
 			NReducer: nReduce,
@@ -113,24 +113,24 @@ func MakeMaster(files []string, nReduce int) *Master {
 }
 
 // 4. master等待worker 调用
-func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
+func (m *Master) AssignTask(args *ExampleArgs, reply *MapTaskMeta) error {
 	if m.MapTaskQueue.Len() > 0 {
 		log.Println("4. master给worker分配map任务")
 
 		element := m.MapTaskQueue.Front()
 		m.MapTaskQueue.Remove(element)
-		if task, ok := element.Value.(TaskMeta); ok {
+		if task, ok := element.Value.(MapTaskMeta); ok {
 			reply = &task
 			m.MapTaskStatus[task.MapTaskNumber] = InProgress
 		} else {
-			return errors.New("Cannot cast to TaskMeta")
+			return errors.New("Cannot cast to MapTaskMeta")
 		}
 	}
 
 	return nil
 }
 
-func (m *Master) MapTaskCompleted(task *TaskMeta, reply *TaskMeta) error {
+func (m *Master) MapTaskCompleted(task *MapTaskMeta, reply *MapTaskMeta) error {
 	log.Println("9.1 master 收到map的结果")
 	m.MapTaskStatus[task.MapTaskNumber] = Completed
 

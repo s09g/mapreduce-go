@@ -60,7 +60,7 @@ func Worker(mapf func(string, string) []KeyValue,
 
 }
 
-func mapper(task TaskMeta, mapf func(string, string) []KeyValue) {
+func mapper(task MapTaskMeta, mapf func(string, string) []KeyValue) {
 	log.Println("7. 获得map task,执行mapf")
 
 	content, err := ioutil.ReadFile(task.Filename)
@@ -87,9 +87,9 @@ func mapper(task TaskMeta, mapf func(string, string) []KeyValue) {
 	MapTaskCompleted(task)
 }
 
-func MapTaskCompleted(task TaskMeta) {
+func MapTaskCompleted(task MapTaskMeta) {
 	log.Println("8.3 通知master map任务完成，将R份文件位置发送给master")
-	reply := TaskMeta{}
+	reply := MapTaskMeta{}
 	call("Master.MapTaskCompleted", &task, &reply)
 	return reply
 }
@@ -137,10 +137,10 @@ func CallExample() {
 }
 
 // 5. master给worker分配任务
-func getTask() TaskMeta {
+func getTask() MapTaskMeta {
 	log.Println("5. master给worker分配任务")
 	args := ExampleArgs{}
-	reply := TaskMeta{}
+	reply := MapTaskMeta{}
 	call("Master.AssignTask", &args, &reply)
 	return reply
 }
