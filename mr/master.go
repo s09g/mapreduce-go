@@ -13,12 +13,9 @@ import "net/http"
 
 type Master struct {
 	// Your definitions here.
-	MapTaskQueue *list.List
-	MapTaskStatus map[int]MasterTaskStatus
-
-	ReduceTaskQueue *list.List
-	ReduceTaskStatus map[int]MasterTaskStatus
-
+	TaskQueue  *list.List
+	TaskStatus map[int]MasterTaskStatus
+	TaskCollections []interface{}
 }
 
 type MasterTaskStatus int
@@ -79,10 +76,9 @@ func (m *Master) Done() bool {
 //
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{
-		MapTaskQueue: list.New(),
-		MapTaskStatus: make(map[int]MasterTaskStatus),
-		ReduceTaskQueue: list.New(),
-		ReduceTaskStatus: make(map[int]MasterTaskStatus),
+		TaskQueue:  list.New(),
+		TaskStatus: make(map[int]MasterTaskStatus),
+		TaskCollections: make([]interface{}, 0),
 	}
 
 
@@ -91,23 +87,17 @@ func MakeMaster(files []string, nReduce int) *Master {
 	// 1. 切成16MB-64MB的文件
 	log.Println("1 make master")
 	// 2. 创建任务副本
-	log.Println("2 创建任务副本")
+	log.Println("2 创建Map任务副本")
 	for idx, filename := range files {
-		m.MapTaskQueue.PushBack(MapTaskMeta{
+		m.TaskQueue.PushBack(MapTaskMeta{
 			Filename:      filename,
 			State:         MapTask,
 			NReducer:      nReduce,
 			MapTaskNumber: idx,
 		})
-		m.MapTaskStatus[idx] = Idle
+		m.TaskStatus[idx] = Idle
 	}
-	for i := 0; i < nReduce; i++ {
-		m.ReduceTaskQueue.PushBack(ReduceTaskMeta{
-			State:            ReduceTask,
-			ReduceTaskNumber: i,
-		})
-		m.ReduceTaskStatus[i] = Idle
-	}
+
 	// 3. 一个程序成为master，其他成为worker
 	log.Println("3 启动server服务器")
 	m.server()
@@ -116,14 +106,14 @@ func MakeMaster(files []string, nReduce int) *Master {
 
 // 4. master等待worker 调用
 func (m *Master) AssignTask(args *ExampleArgs, reply *MapTaskMeta) error {
-	if m.MapTaskQueue.Len() > 0 {
+	if m.TaskQueue.Len() > 0 {
 		log.Println("4. master给worker分配map任务")
 
-		element := m.MapTaskQueue.Front()
-		m.MapTaskQueue.Remove(element)
+		element := m.TaskQueue.Front()
+		m.TaskQueue.Remove(element)
 		if task, ok := element.Value.(MapTaskMeta); ok {
 			reply = &task
-			m.MapTaskStatus[task.MapTaskNumber] = InProgress
+			m.TaskStatus[task.MapTaskNumber] = InProgress
 		} else {
 			return errors.New("Cannot cast to MapTaskMeta")
 		}
@@ -134,6 +124,6 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *MapTaskMeta) error {
 
 func (m *Master) MapTaskCompleted(task *MapTaskMeta, reply *MapTaskMeta) error {
 	log.Println("9.1 master 收到map的结果")
-	m.MapTaskStatus[task.MapTaskNumber] = Completed
+	m.TaskStatus[task.MapTaskNumber] = Completed
 
 }
