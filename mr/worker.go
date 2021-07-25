@@ -43,7 +43,7 @@ func Worker(mapf func(string, string) []KeyValue,
 
 	for {
 		task := getTask()
-		switch task.Status {
+		switch task.State {
 		case MapTask:
 			mapper(task, mapf)
 		case ReduceTask:
@@ -83,7 +83,7 @@ func mapper(task MapTaskMeta, mapf func(string, string) []KeyValue) {
 	}
 
 	log.Println("8.3 将R份文件位置发送给master")
-	task.MapOutput = mapOutput
+	task.MapOutputs = mapOutput
 	MapTaskCompleted(task)
 }
 

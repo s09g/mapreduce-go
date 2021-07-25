@@ -23,24 +23,24 @@ type ExampleReply struct {
 }
 
 type MapTaskMeta struct {
-	Filename string
-	Status   TaskStatus
-	NReducer int
+	Filename      string
+	State         TaskState
+	NReducer      int
 	MapTaskNumber int
-	MapOutput []string
+	MapOutputs    []string
 }
 
 type ReduceTaskMeta struct {
-	Filenames []string
-	Status   TaskStatus
+	Filenames        []string
+	State            TaskState
 	ReduceTaskNumber int
-	ReduceOutput string
+	ReduceOutput     string
 }
 
-type TaskStatus int
+type TaskState int
 
 const (
-	MapTask TaskStatus = iota
+	MapTask TaskState = iota
 	ReduceTask
 	NoTask
 )
