@@ -2,6 +2,7 @@ package mr
 
 import (
 	"container/list"
+	"errors"
 	"log"
 )
 import "net"
@@ -13,7 +14,16 @@ import "net/http"
 type Master struct {
 	// Your definitions here.
 	MapTaskQueue *list.List
+	MapTaskStatus map[int]MasterTaskStatus
 }
+
+type MasterTaskStatus int
+
+const (
+	Idle MasterTaskStatus = iota
+	InProgress
+	Completed
+)
 
 
 // Your code here -- RPC handlers for the worker to call.
@@ -64,7 +74,11 @@ func (m *Master) Done() bool {
 // nReduce is the number of reduce tasks to use.
 //
 func MakeMaster(files []string, nReduce int) *Master {
-	m := Master{}
+	m := Master{
+		MapTaskQueue: list.New(),
+		MapTaskStatus: make(map[int]int),
+
+	}
 
 
 	// Your code here.
@@ -73,7 +87,6 @@ func MakeMaster(files []string, nReduce int) *Master {
 	log.Println("1 make master")
 	// 2. 创建任务副本
 	log.Println("2 创建任务副本")
-	m.MapTaskQueue = list.New()
 	for idx, filename := range files {
 		m.MapTaskQueue.PushBack(TaskMeta{
 			Filename: filename,
@@ -87,4 +100,20 @@ func MakeMaster(files []string, nReduce int) *Master {
 	log.Println("3 启动server服务器")
 	m.server()
 	return &m
+}
+
+// 4. master等待worker 调用
+func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
+	if m.MapTaskQueue.Len() > 0 {
+		element := m.MapTaskQueue.Front()
+		m.MapTaskQueue.Remove(element)
+		if task, ok := element.Value.(TaskMeta); ok {
+			reply = &task
+			m.MapTaskStatus[task.MapTaskNumber] = InProgress
+		} else {
+			return errors.New("Cannot cast to TaskMeta")
+		}
+	}
+
+	return nil
 }

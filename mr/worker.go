@@ -60,7 +60,7 @@ func Worker(mapf func(string, string) []KeyValue,
 
 }
 
-func mapper(task TaskMeta, mapf func(string, string) []KeyValue) []KeyValue {
+func mapper(task TaskMeta, mapf func(string, string) []KeyValue) {
 	log.Println("7. 获得map task,执行mapf")
 
 	content, err := ioutil.ReadFile(task.Filename)
@@ -80,8 +80,8 @@ func mapper(task TaskMeta, mapf func(string, string) []KeyValue) []KeyValue {
 	mapOutput := make([] string, task.NReducer)
 	for i := 0; i < task.NReducer; i++ {
 		mapOutput = append(mapOutput, writeToLocalFile(task.MapTaskNumber, i, buffer[i]))
-
 	}
+
 }
 
 func writeToLocalFile(x int, y int, kvs []KeyValue) string {
