@@ -76,8 +76,7 @@ func (m *Master) Done() bool {
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{
 		MapTaskQueue: list.New(),
-		MapTaskStatus: make(map[int]int),
-
+		MapTaskStatus: make(map[int] MasterTaskStatus),
 	}
 
 
@@ -118,4 +117,10 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
 	}
 
 	return nil
+}
+
+func (m *Master) MapTaskCompleted(task *TaskMeta, reply *TaskMeta) error {
+	log.Println("9.1 master 收到map的结果")
+	m.MapTaskStatus[task.MapTaskNumber] = Completed
+
 }
