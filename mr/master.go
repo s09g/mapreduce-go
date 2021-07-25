@@ -14,10 +14,10 @@ import "net/http"
 type Master struct {
 	// Your definitions here.
 	MapTaskQueue *list.List
-	MapTaskStatus []MasterTaskStatus
+	MapTaskStatus map[int]MasterTaskStatus
 
 	ReduceTaskQueue *list.List
-	ReduceTaskStatus []MasterTaskStatus
+	ReduceTaskStatus map[int]MasterTaskStatus
 
 }
 
@@ -80,9 +80,9 @@ func (m *Master) Done() bool {
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{
 		MapTaskQueue: list.New(),
-		MapTaskStatus: [] MasterTaskStatus{},
+		MapTaskStatus: make(map[int]MasterTaskStatus),
 		ReduceTaskQueue: list.New(),
-		ReduceTaskStatus: [] MasterTaskStatus{},
+		ReduceTaskStatus: make(map[int]MasterTaskStatus),
 	}
 
 
@@ -99,14 +99,14 @@ func MakeMaster(files []string, nReduce int) *Master {
 			NReducer: nReduce,
 			MapTaskNumber: idx,
 		})
-		m.MapTaskStatus = append(m.MapTaskStatus, Idle)
+		m.MapTaskStatus[idx] = Idle
 	}
 	for i := 0; i < nReduce; i++ {
 		m.ReduceTaskQueue.PushBack(ReduceTaskMeta{
 			Status:           ReduceTask,
 			ReduceTaskNumber: i,
 		})
-		m.ReduceTaskStatus = append(m.ReduceTaskStatus, Idle)
+		m.ReduceTaskStatus[i] = Idle
 	}
 	// 3. 一个程序成为master，其他成为worker
 	log.Println("3 启动server服务器")
