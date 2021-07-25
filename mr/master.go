@@ -105,6 +105,8 @@ func MakeMaster(files []string, nReduce int) *Master {
 // 4. master等待worker 调用
 func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
 	if m.MapTaskQueue.Len() > 0 {
+		log.Println("4. master给worker分配map任务")
+
 		element := m.MapTaskQueue.Front()
 		m.MapTaskQueue.Remove(element)
 		if task, ok := element.Value.(TaskMeta); ok {
