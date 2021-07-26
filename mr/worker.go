@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 )
 import "log"
 import "net/rpc"
@@ -49,7 +50,7 @@ func Worker(mapf func(string, string) []KeyValue,
 		case ReduceTask:
 			reducer(task, reducef)
 		case WaitTask:
-			return
+			time.Sleep(5 * time.Second)
 		case NoTask:
 			return
 		default:
