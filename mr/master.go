@@ -18,10 +18,12 @@ const (
 
 type Master struct {
 	// Your definitions here.
-	TaskQueue  chan *TaskMeta
-	TaskStatus map[int]MasterTaskStatus
+	TaskQueue       chan *TaskMeta
+	TaskStatus      map[int]MasterTaskStatus
 	TaskCollections []*TaskMeta
-	Phase MasterPhase
+	Phase           MasterPhase
+	NReduce         int
+	InputFiles 		[]string
 }
 
 type MasterTaskStatus int
@@ -82,10 +84,12 @@ func (m *Master) Done() bool {
 //
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{
-		TaskQueue:  make(chan *TaskMeta, max(nReduce, len(files))),
-		TaskStatus: make(map[int]MasterTaskStatus),
+		TaskQueue:       make(chan *TaskMeta, max(nReduce, len(files))),
+		TaskStatus:      make(map[int]MasterTaskStatus),
 		TaskCollections: make([]*TaskMeta, 0),
-		Phase: Map,
+		Phase:           Map,
+		NReduce:         nReduce,
+		InputFiles: 	 files,
 	}
 
 
@@ -95,20 +99,24 @@ func MakeMaster(files []string, nReduce int) *Master {
 	log.Println("1 make master")
 	// 2. 创建任务副本
 	log.Println("2 创建Map任务副本")
-	for idx, filename := range files {
-		m.TaskQueue<- &TaskMeta{
-					Filename:   filename,
-					State:      MapTask,
-					NReducer:   nReduce,
-					TaskNumber: idx,
-				}
-		m.TaskStatus[idx] = Idle
-	}
+	createMapTask(&m)
 
 	// 3. 一个程序成为master，其他成为worker
 	log.Println("3 启动server服务器")
 	m.server()
 	return &m
+}
+
+func createMapTask(m *Master) {
+	for idx, filename := range m.InputFiles {
+		m.TaskQueue <- &TaskMeta{
+			Filename:   filename,
+			State:      MapTask,
+			NReducer:   m.NReduce,
+			TaskNumber: idx,
+		}
+		m.TaskStatus[idx] = Idle
+	}
 }
 
 func max(a int, b int) int {
