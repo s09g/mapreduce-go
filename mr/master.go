@@ -9,12 +9,20 @@ import "os"
 import "net/rpc"
 import "net/http"
 
+type MasterPhase int
+
+const (
+	Map MasterPhase = iota
+	Reduce
+	Done
+)
 
 type Master struct {
 	// Your definitions here.
 	TaskQueue  chan *TaskMeta
 	TaskStatus map[int]MasterTaskStatus
 	TaskCollections []*TaskMeta
+	Phase MasterPhase
 }
 
 type MasterTaskStatus int
@@ -60,7 +68,7 @@ func (m *Master) server() {
 // if the entire job has finished.
 //
 func (m *Master) Done() bool {
-	ret := false
+	ret := m.Phase == Done
 
 	// Your code here.
 
@@ -78,6 +86,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 		TaskQueue:  make(chan *TaskMeta, max(nReduce, len(files))),
 		TaskStatus: make(map[int]MasterTaskStatus),
 		TaskCollections: make([]*TaskMeta, 0),
+		Phase: Map,
 	}
 
 
@@ -116,9 +125,13 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
 		log.Println("4. master给worker分配map任务")
 		reply = <- m.TaskQueue
 		m.TaskStatus[reply.MapTaskNumber] = InProgress
-	} else {
-		reply = &TaskMeta{State: NoTask,}
+		return nil
 	}
+	if m.Phase == Done {
+		reply = &TaskMeta{State: NoTask,}
+		return nil
+	}
+	reply = &TaskMeta{State: WaitTask,}
 	return nil
 }
 

@@ -35,6 +35,7 @@ type TaskState int
 const (
 	MapTask TaskState = iota
 	ReduceTask
+	WaitTask
 	NoTask
 )
 

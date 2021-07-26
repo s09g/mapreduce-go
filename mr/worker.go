@@ -48,6 +48,8 @@ func Worker(mapf func(string, string) []KeyValue,
 			mapper(task, mapf)
 		case ReduceTask:
 			reducer(task, reducef)
+		case WaitTask:
+			return
 		case NoTask:
 			return
 		default:
