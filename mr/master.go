@@ -154,10 +154,16 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
 
 func (m *Master) TaskCompleted(task *TaskMeta, reply *ExampleReply) error {
 	Println("收到completed task")
+	if m.TaskStatus[task.TaskNumber] == Completed {
+		Println("straggler: already have results from primary job, discard backup job output")
+		return nil
+	}
+	m.TaskStatus[task.TaskNumber] = Completed
+
 	switch task.State {
 	case MapTask:
 		Println("9.1 master 收到map的结果")
-		m.TaskStatus[task.TaskNumber] = Completed
+
 		for reduceTaskId, filePath := range task.Intermediates {
 			m.Intermediates[reduceTaskId] = append(m.Intermediates[reduceTaskId], filePath)
 		}
@@ -169,7 +175,6 @@ func (m *Master) TaskCompleted(task *TaskMeta, reply *ExampleReply) error {
 		}
 	case ReduceTask:
 		Println("12 master 收到reduce的结果")
-		m.TaskStatus[task.TaskNumber] = Completed
 		if allTaskDone(m) {
 			Println("13 结束reduce阶段")
 			m.Phase = Exit
