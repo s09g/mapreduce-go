@@ -54,9 +54,11 @@ func Worker(mapf func(string, string) []KeyValue,
 		task := getTask()
 		switch task.State {
 		case MapTask:
-			mapper(task, mapf)
+			mapper(&task, mapf)
+			TaskCompleted(&task)
 		case ReduceTask:
-			reducer(task, reducef)
+			reducer(&task, reducef)
+			TaskCompleted(&task)
 		case WaitTask:
 			time.Sleep(5 * time.Second)
 		case NoTask:
@@ -71,20 +73,48 @@ func Worker(mapf func(string, string) []KeyValue,
 
 }
 
-func reducer(task TaskMeta, reducef func(string, []string) string) {
+func reducer(task *TaskMeta, reducef func(string, []string) string) {
 	log.Println("10. 获得reduce task, 执行reducef")
-	kva := readFromLocalFile(task.Intermediates)
-	sort.Sort(ByKey(*kva))
+	intermediate := *readFromLocalFile(task.Intermediates)
+	sort.Sort(ByKey(intermediate))
+
+	oname := "mr-out-" + string(task.TaskNumber)
+	ofile, _ := os.Create(oname)
+
+	//
+	// call Reduce on each distinct key in intermediate[],
+	// and print the result to mr-out-0.
+	//
+	i := 0
+	for i < len(intermediate) {
+		j := i + 1
+		for j < len(intermediate) && intermediate[j].Key == intermediate[i].Key {
+			j++
+		}
+		values := []string{}
+		for k := i; k < j; k++ {
+			values = append(values, intermediate[k].Value)
+		}
+		output := reducef(intermediate[i].Key, values)
+
+		// this is the correct format for each line of Reduce output.
+		fmt.Fprintf(ofile, "%v %v\n", intermediate[i].Key, output)
+
+		i = j
+	}
+
+	ofile.Close()
+	task.Output = oname
 }
 
-func mapper(task TaskMeta, mapf func(string, string) []KeyValue) {
+func mapper(task *TaskMeta, mapf func(string, string) []KeyValue) {
 	log.Println("7. 获得map task,执行mapf")
 
-	content, err := ioutil.ReadFile(task.Filename)
+	content, err := ioutil.ReadFile(task.Input)
 	if err != nil {
-		log.Fatal("fail to read file: " + task.Filename, err)
+		log.Fatal("fail to read file: " + task.Input, err)
 	}
-	intermediates := mapf(task.Filename, string(content))
+	intermediates := mapf(task.Input, string(content))
 
 	log.Println("8.1 中间结果切分成R份（reducer数量）")
 	buffer := make([][] KeyValue, task.NReducer)
@@ -101,11 +131,11 @@ func mapper(task TaskMeta, mapf func(string, string) []KeyValue) {
 
 	log.Println("8.3 将R份文件位置发送给master")
 	task.Intermediates = mapOutput
-	TaskCompleted(&task)
 }
 
 func TaskCompleted(task *TaskMeta) {
 	log.Println("8.3 通知master map任务完成，将R份文件位置发送给master")
+	log.Println("11 通知master reduce 任务完成，将R份文件位置发送给master")
 	reply := ExampleReply{}
 	call("Master.TaskCompleted", task, &reply)
 }

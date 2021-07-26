@@ -110,7 +110,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 func (m *Master) createMapTask() {
 	for idx, filename := range m.InputFiles {
 		m.TaskQueue <- &TaskMeta{
-			Filename:   filename,
+			Input:      filename,
 			State:      MapTask,
 			NReducer:   m.NReduce,
 			TaskNumber: idx,

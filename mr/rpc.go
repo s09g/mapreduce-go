@@ -23,11 +23,12 @@ type ExampleReply struct {
 }
 
 type TaskMeta struct {
-	Filename      string
+	Input         string
 	State         TaskState
 	NReducer      int
 	TaskNumber    int
 	Intermediates []string
+	Output 		  string
 }
 
 type TaskState int
