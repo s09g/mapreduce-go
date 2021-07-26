@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 )
 import "log"
@@ -31,6 +32,13 @@ func ihash(key string) int {
 	return int(h.Sum32() & 0x7fffffff)
 }
 
+// for sorting by key.
+type ByKey []KeyValue
+
+// for sorting by key.
+func (a ByKey) Len() int           { return len(a) }
+func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 //
 // main/mrworker.go calls this function.
@@ -63,6 +71,12 @@ func Worker(mapf func(string, string) []KeyValue,
 
 }
 
+func reducer(task TaskMeta, reducef func(string, []string) string) {
+	log.Println("10. 获得reduce task, 执行reducef")
+	kva := readFromLocalFile(task.Intermediates)
+	sort.Sort(ByKey(*kva))
+}
+
 func mapper(task TaskMeta, mapf func(string, string) []KeyValue) {
 	log.Println("7. 获得map task,执行mapf")
 
@@ -82,7 +96,7 @@ func mapper(task TaskMeta, mapf func(string, string) []KeyValue) {
 	log.Println("8.2 中间结果写到本地磁盘")
 	mapOutput := make([] string, task.NReducer)
 	for i := 0; i < task.NReducer; i++ {
-		mapOutput = append(mapOutput, writeToLocalFile(task.TaskNumber, i, buffer[i]))
+		mapOutput = append(mapOutput, writeToLocalFile(task.TaskNumber, i, &buffer[i]))
 	}
 
 	log.Println("8.3 将R份文件位置发送给master")
@@ -96,14 +110,14 @@ func TaskCompleted(task *TaskMeta) {
 	call("Master.TaskCompleted", task, &reply)
 }
 
-func writeToLocalFile(x int, y int, kvs []KeyValue) string {
+func writeToLocalFile(x int, y int, kvs *[]KeyValue) string {
 	dir, _ := os.Getwd()
 	tempFile, err := ioutil.TempFile(dir, "mr-tmp-*")
 	if err != nil {
 		log.Fatal("Fail to create temp file", err)
 	}
 	enc := json.NewEncoder(tempFile)
-	for _, kv := range kvs {
+	for _, kv := range *kvs {
 		if err := enc.Encode(&kv); err != nil {
 			log.Fatal("fail to write kv pair", err)
 		}
@@ -112,6 +126,26 @@ func writeToLocalFile(x int, y int, kvs []KeyValue) string {
 	os.Rename(tempFile.Name(), outputName)
 	tempFile.Close()
 	return filepath.Join(dir, outputName)
+}
+
+func readFromLocalFile(files []string) *[]KeyValue{
+	kva := []KeyValue{}
+	for _, filepath := range files{
+		file, err := os.Open(filepath)
+		if err != nil {
+			log.Fatal("Fail to open file " + filepath, err)
+		}
+		dec := json.NewDecoder(file)
+		for {
+			var kv KeyValue
+			if err := dec.Decode(&kv); err != nil {
+				break
+			}
+			kva = append(kva, kv)
+		}
+		file.Close()
+	}
+	return &kva
 }
 
 
