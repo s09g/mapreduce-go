@@ -20,18 +20,18 @@ const (
 
 type Master struct {
 	// Your definitions here.
-	TaskQueue        chan *TaskMeta
-	MasterTaskStatus map[int]*MasterTask
-	Phase            MasterPhase
-	NReduce          int
-	InputFiles       []string
-	Intermediates    [][]string
+	TaskQueue     chan *Task
+	TaskMeta      map[int]*MasterTask
+	Phase         MasterPhase
+	NReduce       int
+	InputFiles    []string
+	Intermediates [][]string
 }
 
 type MasterTask struct {
 	TaskStatus MasterTaskStatus
 	StartTime time.Time
-	TaskReference *TaskMeta
+	TaskReference *Task
 }
 
 type MasterTaskStatus int
@@ -89,12 +89,12 @@ func (m *Master) Done() bool {
 //
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{
-		TaskQueue:        make(chan *TaskMeta, max(nReduce, len(files))),
-		MasterTaskStatus: make(map[int]*MasterTask),
-		Phase:            Map,
-		NReduce:          nReduce,
-		InputFiles:       files,
-		Intermediates:    make([][]string, nReduce),
+		TaskQueue:     make(chan *Task, max(nReduce, len(files))),
+		TaskMeta:      make(map[int]*MasterTask),
+		Phase:         Map,
+		NReduce:       nReduce,
+		InputFiles:    files,
+		Intermediates: make([][]string, nReduce),
 	}
 
 	// Your code here.
@@ -108,19 +108,35 @@ func MakeMaster(files []string, nReduce int) *Master {
 	// 3. 一个程序成为master，其他成为worker
 	Println("3 启动server服务器")
 	m.server()
+	go m.catchTimeOut()
 	return &m
+}
+
+func (m *Master) catchTimeOut() {
+	for {
+		time.Sleep(time.Minute)
+		if m.Phase == Exit {
+			return
+		}
+		for _, masterTask := range m.TaskMeta {
+			if masterTask.TaskStatus == InProgress && time.Now().Sub(masterTask.StartTime) > time.Minute {
+				m.TaskQueue <- masterTask.TaskReference
+				masterTask.TaskStatus = Idle
+			}
+		}
+	}
 }
 
 func (m *Master) createMapTask() {
 	for idx, filename := range m.InputFiles {
-		taskMeta := TaskMeta{
+		taskMeta := Task{
 			Input:      filename,
 			State:      MapTask,
 			NReducer:   m.NReduce,
 			TaskNumber: idx,
 		}
 		m.TaskQueue <- &taskMeta
-		m.MasterTaskStatus[idx] = &MasterTask{
+		m.TaskMeta[idx] = &MasterTask{
 			TaskStatus:    Idle,
 			TaskReference: &taskMeta,
 		}
@@ -130,16 +146,16 @@ func (m *Master) createMapTask() {
 func (m *Master) createReduceTask() {
 	Println("createReduceTask")
 
-	m.MasterTaskStatus = make(map[int]*MasterTask)
+	m.TaskMeta = make(map[int]*MasterTask)
 	for idx, files := range m.Intermediates {
-		taskMeta := TaskMeta{
+		taskMeta := Task{
 			State:         ReduceTask,
 			NReducer:      m.NReduce,
 			TaskNumber:    idx,
 			Intermediates: files,
 		}
 		m.TaskQueue <- &taskMeta
-		m.MasterTaskStatus[idx] = &MasterTask{
+		m.TaskMeta[idx] = &MasterTask{
 			TaskStatus:    Idle,
 			TaskReference: &taskMeta,
 		}
@@ -154,27 +170,27 @@ func max(a int, b int) int {
 }
 
 // 4. master等待worker 调用
-func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
+func (m *Master) AssignTask(args *ExampleArgs, reply *Task) error {
 	if len(m.TaskQueue) > 0 {
 		Println("4. master给worker分配任务")
 		*reply = *<-m.TaskQueue
-		m.MasterTaskStatus[reply.TaskNumber].TaskStatus = InProgress
-		m.MasterTaskStatus[reply.TaskNumber].StartTime = time.Now()
+		m.TaskMeta[reply.TaskNumber].TaskStatus = InProgress
+		m.TaskMeta[reply.TaskNumber].StartTime = time.Now()
 	} else if m.Phase == Exit {
-		*reply = TaskMeta{State: NoTask}
+		*reply = Task{State: NoTask}
 	} else {
-		*reply = TaskMeta{State: WaitTask}
+		*reply = Task{State: WaitTask}
 	}
 	return nil
 }
 
-func (m *Master) TaskCompleted(task *TaskMeta, reply *ExampleReply) error {
+func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 	Println("收到completed task")
-	if m.MasterTaskStatus[task.TaskNumber].TaskStatus == Completed {
+	if m.TaskMeta[task.TaskNumber].TaskStatus == Completed {
 		Println("straggler: already have results from primary job, discard backup job output")
 		return nil
 	}
-	m.MasterTaskStatus[task.TaskNumber].TaskStatus = Completed
+	m.TaskMeta[task.TaskNumber].TaskStatus = Completed
 
 	switch task.State {
 	case MapTask:
@@ -202,7 +218,7 @@ func (m *Master) TaskCompleted(task *TaskMeta, reply *ExampleReply) error {
 }
 
 func allTaskDone(m *Master) bool {
-	for _, task := range m.MasterTaskStatus {
+	for _, task := range m.TaskMeta {
 		if task.TaskStatus != Completed {
 			return false
 		}

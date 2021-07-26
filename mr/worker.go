@@ -73,7 +73,7 @@ func Worker(mapf func(string, string) []KeyValue,
 
 }
 
-func reducer(task *TaskMeta, reducef func(string, []string) string) {
+func reducer(task *Task, reducef func(string, []string) string) {
 	Println("worker: 10. 获得reduce task, 执行reducef")
 	intermediate := *readFromLocalFile(task.Intermediates)
 	sort.Sort(ByKey(intermediate))
@@ -107,7 +107,7 @@ func reducer(task *TaskMeta, reducef func(string, []string) string) {
 	task.Output = oname
 }
 
-func mapper(task *TaskMeta, mapf func(string, string) []KeyValue) {
+func mapper(task *Task, mapf func(string, string) []KeyValue) {
 	Println("worker: 7. 获得map task,执行mapf")
 
 	content, err := ioutil.ReadFile(task.Input)
@@ -133,7 +133,7 @@ func mapper(task *TaskMeta, mapf func(string, string) []KeyValue) {
 	task.Intermediates = mapOutput
 }
 
-func TaskCompleted(task *TaskMeta) {
+func TaskCompleted(task *Task) {
 	Println("worker: 8.3 通知master map任务完成，将R份文件位置发送给master")
 	reply := ExampleReply{}
 	call("Master.TaskCompleted", task, &reply)
@@ -201,10 +201,10 @@ func CallExample() {
 }
 
 // 5. master给worker分配任务
-func getTask() TaskMeta {
+func getTask() Task {
 	Println("worker: 5. master给worker分配任务")
 	args := ExampleArgs{}
-	reply := TaskMeta{}
+	reply := Task{}
 	call("Master.AssignTask", &args, &reply)
 	return reply
 }
@@ -219,7 +219,8 @@ func call(rpcname string, args interface{}, reply interface{}) bool {
 	sockname := masterSock()
 	c, err := rpc.DialHTTP("unix", sockname)
 	if err != nil {
-		log.Fatal("dialing:", err)
+		os.Exit(0)
+		//log.Fatal("Master has exited. Terminate worker ", err)
 	}
 	defer c.Close()
 

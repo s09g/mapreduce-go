@@ -24,7 +24,7 @@ type ExampleReply struct {
 	Y int
 }
 
-type TaskMeta struct {
+type Task struct {
 	Input         string
 	State         TaskState
 	NReducer      int
