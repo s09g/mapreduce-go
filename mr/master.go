@@ -1,7 +1,6 @@
 package mr
 
 import (
-	"errors"
 	"log"
 )
 import "net"
@@ -135,8 +134,14 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
 	return nil
 }
 
-func (m *Master) MapTaskCompleted(task *TaskMeta, reply *ExampleReply) error {
-	log.Println("9.1 master 收到map的结果")
-	m.TaskStatus[task.MapTaskNumber] = Completed
-	m.TaskCollections = append(m.TaskCollections, task)
+func (m *Master) TaskCompleted(task *TaskMeta, reply *ExampleReply) error {
+	log.Println("收到completed task")
+	switch task.State {
+	case MapTask:
+		log.Println("9.1 master 收到map的结果")
+		m.TaskStatus[task.MapTaskNumber] = Completed
+		m.TaskCollections = append(m.TaskCollections, task)
+		
+	}
+
 }
