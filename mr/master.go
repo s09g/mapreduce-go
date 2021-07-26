@@ -15,7 +15,7 @@ type Master struct {
 	// Your definitions here.
 	TaskQueue  *list.List
 	TaskStatus map[int]MasterTaskStatus
-	TaskCollections []interface{}
+	TaskCollections []*TaskMeta
 }
 
 type MasterTaskStatus int
@@ -78,7 +78,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{
 		TaskQueue:  list.New(),
 		TaskStatus: make(map[int]MasterTaskStatus),
-		TaskCollections: make([]interface{}, 0),
+		TaskCollections: make([]*TaskMeta, 0),
 	}
 
 
@@ -89,7 +89,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 	// 2. 创建任务副本
 	log.Println("2 创建Map任务副本")
 	for idx, filename := range files {
-		m.TaskQueue.PushBack(MapTaskMeta{
+		m.TaskQueue.PushBack(TaskMeta{
 			Filename:      filename,
 			State:         MapTask,
 			NReducer:      nReduce,
@@ -105,25 +105,25 @@ func MakeMaster(files []string, nReduce int) *Master {
 }
 
 // 4. master等待worker 调用
-func (m *Master) AssignTask(args *ExampleArgs, reply *MapTaskMeta) error {
+func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
 	if m.TaskQueue.Len() > 0 {
 		log.Println("4. master给worker分配map任务")
 
 		element := m.TaskQueue.Front()
 		m.TaskQueue.Remove(element)
-		if task, ok := element.Value.(MapTaskMeta); ok {
+		if task, ok := element.Value.(TaskMeta); ok {
 			reply = &task
 			m.TaskStatus[task.MapTaskNumber] = InProgress
 		} else {
-			return errors.New("Cannot cast to MapTaskMeta")
+			return errors.New("Cannot cast to TaskMeta")
 		}
 	}
 
 	return nil
 }
 
-func (m *Master) MapTaskCompleted(task *MapTaskMeta, reply *MapTaskMeta) error {
+func (m *Master) MapTaskCompleted(task *TaskMeta, reply *ExampleReply) error {
 	log.Println("9.1 master 收到map的结果")
 	m.TaskStatus[task.MapTaskNumber] = Completed
-
+	m.TaskCollections = append(m.TaskCollections, task)
 }

@@ -22,19 +22,12 @@ type ExampleReply struct {
 	Y int
 }
 
-type MapTaskMeta struct {
+type TaskMeta struct {
 	Filename      string
 	State         TaskState
 	NReducer      int
 	MapTaskNumber int
-	MapOutputs    []string
-}
-
-type ReduceTaskMeta struct {
-	Filenames        []string
-	State            TaskState
-	ReduceTaskNumber int
-	ReduceOutput     string
+	Intermediates []string
 }
 
 type TaskState int
