@@ -151,7 +151,7 @@ func writeToLocalFile(x int, y int, kvs *[]KeyValue) string {
 			log.Fatal("fail to write kv pair", err)
 		}
 	}
-	outputName := fmt.Sprintf("mr-tmp-%d-%d", x, y)
+	outputName := fmt.Sprintf("mr-%d-%d", x, y)
 	os.Rename(tempFile.Name(), outputName)
 	tempFile.Close()
 	return filepath.Join(dir, outputName)

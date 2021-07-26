@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
+	"time"
 )
 
 type MasterPhase int
@@ -19,12 +20,18 @@ const (
 
 type Master struct {
 	// Your definitions here.
-	TaskQueue       chan *TaskMeta
-	TaskStatus      map[int]MasterTaskStatus
-	Phase           MasterPhase
-	NReduce         int
-	InputFiles      []string
-	Intermediates   [][]string
+	TaskQueue        chan *TaskMeta
+	MasterTaskStatus map[int]*MasterTask
+	Phase            MasterPhase
+	NReduce          int
+	InputFiles       []string
+	Intermediates    [][]string
+}
+
+type MasterTask struct {
+	TaskStatus MasterTaskStatus
+	StartTime time.Time
+	TaskReference *TaskMeta
 }
 
 type MasterTaskStatus int
@@ -82,12 +89,12 @@ func (m *Master) Done() bool {
 //
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{
-		TaskQueue:       make(chan *TaskMeta, max(nReduce, len(files))),
-		TaskStatus:      make(map[int]MasterTaskStatus),
-		Phase:           Map,
-		NReduce:         nReduce,
-		InputFiles:      files,
-		Intermediates:   make([][]string, nReduce),
+		TaskQueue:        make(chan *TaskMeta, max(nReduce, len(files))),
+		MasterTaskStatus: make(map[int]*MasterTask),
+		Phase:            Map,
+		NReduce:          nReduce,
+		InputFiles:       files,
+		Intermediates:    make([][]string, nReduce),
 	}
 
 	// Your code here.
@@ -106,28 +113,36 @@ func MakeMaster(files []string, nReduce int) *Master {
 
 func (m *Master) createMapTask() {
 	for idx, filename := range m.InputFiles {
-		m.TaskQueue <- &TaskMeta{
+		taskMeta := TaskMeta{
 			Input:      filename,
 			State:      MapTask,
 			NReducer:   m.NReduce,
 			TaskNumber: idx,
 		}
-		m.TaskStatus[idx] = Idle
+		m.TaskQueue <- &taskMeta
+		m.MasterTaskStatus[idx] = &MasterTask{
+			TaskStatus:    Idle,
+			TaskReference: &taskMeta,
+		}
 	}
 }
 
 func (m *Master) createReduceTask() {
 	Println("createReduceTask")
 
-	m.TaskStatus = make(map[int]MasterTaskStatus)
+	m.MasterTaskStatus = make(map[int]*MasterTask)
 	for idx, files := range m.Intermediates {
-		m.TaskQueue <- &TaskMeta{
+		taskMeta := TaskMeta{
 			State:         ReduceTask,
 			NReducer:      m.NReduce,
 			TaskNumber:    idx,
 			Intermediates: files,
 		}
-		m.TaskStatus[idx] = Idle
+		m.TaskQueue <- &taskMeta
+		m.MasterTaskStatus[idx] = &MasterTask{
+			TaskStatus:    Idle,
+			TaskReference: &taskMeta,
+		}
 	}
 }
 
@@ -143,7 +158,8 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
 	if len(m.TaskQueue) > 0 {
 		Println("4. master给worker分配任务")
 		*reply = *<-m.TaskQueue
-		m.TaskStatus[reply.TaskNumber] = InProgress
+		m.MasterTaskStatus[reply.TaskNumber].TaskStatus = InProgress
+		m.MasterTaskStatus[reply.TaskNumber].StartTime = time.Now()
 	} else if m.Phase == Exit {
 		*reply = TaskMeta{State: NoTask}
 	} else {
@@ -154,11 +170,11 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
 
 func (m *Master) TaskCompleted(task *TaskMeta, reply *ExampleReply) error {
 	Println("收到completed task")
-	if m.TaskStatus[task.TaskNumber] == Completed {
+	if m.MasterTaskStatus[task.TaskNumber].TaskStatus == Completed {
 		Println("straggler: already have results from primary job, discard backup job output")
 		return nil
 	}
-	m.TaskStatus[task.TaskNumber] = Completed
+	m.MasterTaskStatus[task.TaskNumber].TaskStatus = Completed
 
 	switch task.State {
 	case MapTask:
@@ -186,8 +202,8 @@ func (m *Master) TaskCompleted(task *TaskMeta, reply *ExampleReply) error {
 }
 
 func allTaskDone(m *Master) bool {
-	for _, status := range m.TaskStatus {
-		if status != Completed {
+	for _, task := range m.MasterTaskStatus {
+		if task.TaskStatus != Completed {
 			return false
 		}
 	}
