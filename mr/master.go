@@ -21,10 +21,10 @@ type Master struct {
 	// Your definitions here.
 	TaskQueue       chan *TaskMeta
 	TaskStatus      map[int]MasterTaskStatus
-	TaskCollections []*TaskMeta
 	Phase           MasterPhase
 	NReduce         int
 	InputFiles      []string
+	Intermediates   [][]string
 }
 
 type MasterTaskStatus int
@@ -84,10 +84,10 @@ func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{
 		TaskQueue:       make(chan *TaskMeta, max(nReduce, len(files))),
 		TaskStatus:      make(map[int]MasterTaskStatus),
-		TaskCollections: make([]*TaskMeta, 0),
 		Phase:           Map,
 		NReduce:         nReduce,
 		InputFiles:      files,
+		Intermediates:   make([][]string, nReduce),
 	}
 
 	// Your code here.
@@ -118,15 +118,9 @@ func (m *Master) createMapTask() {
 
 func (m *Master) createReduceTask() {
 	Println("createReduceTask")
-	intermediates := make([][]string, m.NReduce)
-	for _, task := range m.TaskCollections {
-		for reduceTaskNumber, filePath := range task.Intermediates {
-			intermediates[reduceTaskNumber] = append(intermediates[reduceTaskNumber], filePath)
-		}
-	}
-	Println("update master")
+
 	m.TaskStatus = make(map[int]MasterTaskStatus)
-	for idx, files := range intermediates {
+	for idx, files := range m.Intermediates {
 		m.TaskQueue <- &TaskMeta{
 			State:         ReduceTask,
 			NReducer:      m.NReduce,
@@ -135,7 +129,6 @@ func (m *Master) createReduceTask() {
 		}
 		m.TaskStatus[idx] = Idle
 	}
-	m.TaskCollections = make([]*TaskMeta, 0)
 }
 
 func max(a int, b int) int {
@@ -165,7 +158,10 @@ func (m *Master) TaskCompleted(task *TaskMeta, reply *ExampleReply) error {
 	case MapTask:
 		Println("9.1 master 收到map的结果")
 		m.TaskStatus[task.TaskNumber] = Completed
-		m.TaskCollections = append(m.TaskCollections, task)
+		for reduceTaskId, filePath := range task.Intermediates {
+			m.Intermediates[reduceTaskId] = append(m.Intermediates[reduceTaskId], filePath)
+		}
+
 		if allTaskDone(m) {
 			Println("9.2 结束Map阶段 进入reduce阶段")
 			m.createReduceTask()
@@ -174,7 +170,6 @@ func (m *Master) TaskCompleted(task *TaskMeta, reply *ExampleReply) error {
 	case ReduceTask:
 		Println("12 master 收到reduce的结果")
 		m.TaskStatus[task.TaskNumber] = Completed
-		m.TaskCollections = append(m.TaskCollections, task)
 		if allTaskDone(m) {
 			Println("13 结束reduce阶段")
 			m.Phase = Exit
