@@ -3,11 +3,11 @@ package mr
 import (
 	"errors"
 	"log"
+	"net"
+	"net/http"
+	"net/rpc"
+	"os"
 )
-import "net"
-import "os"
-import "net/rpc"
-import "net/http"
 
 type MasterPhase int
 
@@ -24,7 +24,7 @@ type Master struct {
 	TaskCollections []*TaskMeta
 	Phase           MasterPhase
 	NReduce         int
-	InputFiles 		[]string
+	InputFiles      []string
 }
 
 type MasterTaskStatus int
@@ -34,7 +34,6 @@ const (
 	InProgress
 	Completed
 )
-
 
 // Your code here -- RPC handlers for the worker to call.
 
@@ -47,7 +46,6 @@ func (m *Master) Example(args *ExampleArgs, reply *ExampleReply) error {
 	reply.Y = args.X + 1
 	return nil
 }
-
 
 //
 // start a thread that listens for RPCs from worker.go
@@ -74,7 +72,6 @@ func (m *Master) Done() bool {
 
 	// Your code here.
 
-
 	return ret
 }
 
@@ -90,20 +87,19 @@ func MakeMaster(files []string, nReduce int) *Master {
 		TaskCollections: make([]*TaskMeta, 0),
 		Phase:           Map,
 		NReduce:         nReduce,
-		InputFiles: 	 files,
+		InputFiles:      files,
 	}
-
 
 	// Your code here.
 
 	// 1. 切成16MB-64MB的文件
-	log.Println("1 make master")
+	Println("1 make master")
 	// 2. 创建任务副本
-	log.Println("2 创建Map任务副本")
+	Println("2 创建Map任务副本")
 	m.createMapTask()
 
 	// 3. 一个程序成为master，其他成为worker
-	log.Println("3 启动server服务器")
+	Println("3 启动server服务器")
 	m.server()
 	return &m
 }
@@ -121,14 +117,14 @@ func (m *Master) createMapTask() {
 }
 
 func (m *Master) createReduceTask() {
-	log.Println("createReduceTask")
+	Println("createReduceTask")
 	intermediates := make([][]string, m.NReduce)
 	for _, task := range m.TaskCollections {
 		for reduceTaskNumber, filePath := range task.Intermediates {
 			intermediates[reduceTaskNumber] = append(intermediates[reduceTaskNumber], filePath)
 		}
 	}
-	log.Println("update master")
+	Println("update master")
 	m.TaskStatus = make(map[int]MasterTaskStatus)
 	for idx, files := range intermediates {
 		m.TaskQueue <- &TaskMeta{
@@ -152,35 +148,35 @@ func max(a int, b int) int {
 // 4. master等待worker 调用
 func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
 	if len(m.TaskQueue) > 0 {
-		log.Println("4. master给worker分配任务")
-		*reply = *<- m.TaskQueue
+		Println("4. master给worker分配任务")
+		*reply = *<-m.TaskQueue
 		m.TaskStatus[reply.TaskNumber] = InProgress
 	} else if m.Phase == Exit {
-		*reply = TaskMeta{State: NoTask,}
+		*reply = TaskMeta{State: NoTask}
 	} else {
-		*reply = TaskMeta{State: WaitTask,}
+		*reply = TaskMeta{State: WaitTask}
 	}
 	return nil
 }
 
 func (m *Master) TaskCompleted(task *TaskMeta, reply *ExampleReply) error {
-	log.Println("收到completed task")
+	Println("收到completed task")
 	switch task.State {
 	case MapTask:
-		log.Println("9.1 master 收到map的结果")
+		Println("9.1 master 收到map的结果")
 		m.TaskStatus[task.TaskNumber] = Completed
 		m.TaskCollections = append(m.TaskCollections, task)
 		if allTaskDone(m) {
-			log.Println("9.2 结束Map阶段 进入reduce阶段")
+			Println("9.2 结束Map阶段 进入reduce阶段")
 			m.createReduceTask()
 			m.Phase = Reduce
 		}
 	case ReduceTask:
-		log.Println("12 master 收到reduce的结果")
+		Println("12 master 收到reduce的结果")
 		m.TaskStatus[task.TaskNumber] = Completed
 		m.TaskCollections = append(m.TaskCollections, task)
 		if allTaskDone(m) {
-			log.Println("13 结束reduce阶段")
+			Println("13 结束reduce阶段")
 			m.Phase = Exit
 		}
 	default:

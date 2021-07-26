@@ -6,7 +6,9 @@ package mr
 // remember to capitalize all names.
 //
 
-import "os"
+import (
+	"os"
+)
 import "strconv"
 
 //
@@ -51,4 +53,12 @@ func masterSock() string {
 	s := "/var/tmp/824-mr-"
 	s += strconv.Itoa(os.Getuid())
 	return s
+}
+
+func Println(v ...interface{}) {
+	//fmt.Println(v...)
+}
+
+func Printf(format string, v ...interface{}) {
+	//fmt.Printf(format, v...)
 }
