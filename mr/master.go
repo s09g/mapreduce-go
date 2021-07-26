@@ -141,6 +141,19 @@ func (m *Master) TaskCompleted(task *TaskMeta, reply *ExampleReply) error {
 		log.Println("9.1 master 收到map的结果")
 		m.TaskStatus[task.TaskNumber] = Completed
 		m.TaskCollections = append(m.TaskCollections, task)
+		if allTaskDone(m) {
+			log.Println("9.2 结束Map阶段 进入reduce阶段")
+
+		}
 	}
 
+}
+
+func allTaskDone(m *Master) bool {
+	for _, task := range m.TaskCollections {
+		if m.TaskStatus[task.TaskNumber] != Completed {
+			return false
+		}
+	}
+	return true
 }
