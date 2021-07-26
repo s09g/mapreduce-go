@@ -17,3 +17,8 @@ mr-out*
 .run/
 *.xml
 test.sh
+mr-tmp-*
+mr-tmp/
+mrmaster
+mrsequential
+mrworker
