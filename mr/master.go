@@ -99,7 +99,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 	log.Println("1 make master")
 	// 2. 创建任务副本
 	log.Println("2 创建Map任务副本")
-	createMapTask(&m)
+	m.createMapTask()
 
 	// 3. 一个程序成为master，其他成为worker
 	log.Println("3 启动server服务器")
@@ -107,7 +107,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 	return &m
 }
 
-func createMapTask(m *Master) {
+func (m *Master) createMapTask() {
 	for idx, filename := range m.InputFiles {
 		m.TaskQueue <- &TaskMeta{
 			Filename:   filename,
@@ -117,6 +117,27 @@ func createMapTask(m *Master) {
 		}
 		m.TaskStatus[idx] = Idle
 	}
+}
+
+func (m *Master) createReduceTask() {
+	intermediates := make([][]string, m.NReduce)
+	for _, task := range m.TaskCollections {
+		for reduceTaskNumber, filePath := range task.Intermediates {
+			intermediates[reduceTaskNumber] = append(intermediates[reduceTaskNumber], filePath)
+		}
+	}
+
+	m.TaskStatus = make(map[int]MasterTaskStatus)
+	for idx, files := range intermediates {
+		m.TaskQueue <- &TaskMeta{
+			State:         ReduceTask,
+			NReducer:      m.NReduce,
+			TaskNumber:    idx,
+			Intermediates: files,
+		}
+		m.TaskStatus[idx] = Idle
+	}
+	m.TaskCollections = make([]*TaskMeta, 0)
 }
 
 func max(a int, b int) int {
@@ -151,7 +172,8 @@ func (m *Master) TaskCompleted(task *TaskMeta, reply *ExampleReply) error {
 		m.TaskCollections = append(m.TaskCollections, task)
 		if allTaskDone(m) {
 			log.Println("9.2 结束Map阶段 进入reduce阶段")
-
+			m.createReduceTask()
+			m.Phase = Reduce
 		}
 	}
 
