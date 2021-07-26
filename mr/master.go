@@ -1,7 +1,6 @@
 package mr
 
 import (
-	"container/list"
 	"errors"
 	"log"
 )
@@ -13,7 +12,7 @@ import "net/http"
 
 type Master struct {
 	// Your definitions here.
-	TaskQueue  *list.List
+	TaskQueue  chan *TaskMeta
 	TaskStatus map[int]MasterTaskStatus
 	TaskCollections []*TaskMeta
 }
@@ -76,7 +75,7 @@ func (m *Master) Done() bool {
 //
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{
-		TaskQueue:  list.New(),
+		TaskQueue:  make(chan *TaskMeta, max(nReduce, len(files))),
 		TaskStatus: make(map[int]MasterTaskStatus),
 		TaskCollections: make([]*TaskMeta, 0),
 	}
@@ -89,12 +88,12 @@ func MakeMaster(files []string, nReduce int) *Master {
 	// 2. 创建任务副本
 	log.Println("2 创建Map任务副本")
 	for idx, filename := range files {
-		m.TaskQueue.PushBack(TaskMeta{
-			Filename:      filename,
-			State:         MapTask,
-			NReducer:      nReduce,
-			MapTaskNumber: idx,
-		})
+		m.TaskQueue<- &TaskMeta{
+					Filename:      filename,
+					State:         MapTask,
+					NReducer:      nReduce,
+					MapTaskNumber: idx,
+				}
 		m.TaskStatus[idx] = Idle
 	}
 
@@ -104,19 +103,19 @@ func MakeMaster(files []string, nReduce int) *Master {
 	return &m
 }
 
+func max(a int, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 // 4. master等待worker 调用
 func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
-	if m.TaskQueue.Len() > 0 {
+	if len(m.TaskQueue) > 0 {
 		log.Println("4. master给worker分配map任务")
-
-		element := m.TaskQueue.Front()
-		m.TaskQueue.Remove(element)
-		if task, ok := element.Value.(TaskMeta); ok {
-			reply = &task
-			m.TaskStatus[task.MapTaskNumber] = InProgress
-		} else {
-			return errors.New("Cannot cast to TaskMeta")
-		}
+		reply = <- m.TaskQueue
+		m.TaskStatus[reply.MapTaskNumber] = InProgress
 	}
 
 	return nil
