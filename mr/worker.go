@@ -82,7 +82,7 @@ func mapper(task TaskMeta, mapf func(string, string) []KeyValue) {
 	log.Println("8.2 中间结果写到本地磁盘")
 	mapOutput := make([] string, task.NReducer)
 	for i := 0; i < task.NReducer; i++ {
-		mapOutput = append(mapOutput, writeToLocalFile(task.MapTaskNumber, i, buffer[i]))
+		mapOutput = append(mapOutput, writeToLocalFile(task.TaskNumber, i, buffer[i]))
 	}
 
 	log.Println("8.3 将R份文件位置发送给master")

@@ -97,10 +97,10 @@ func MakeMaster(files []string, nReduce int) *Master {
 	log.Println("2 创建Map任务副本")
 	for idx, filename := range files {
 		m.TaskQueue<- &TaskMeta{
-					Filename:      filename,
-					State:         MapTask,
-					NReducer:      nReduce,
-					MapTaskNumber: idx,
+					Filename:   filename,
+					State:      MapTask,
+					NReducer:   nReduce,
+					TaskNumber: idx,
 				}
 		m.TaskStatus[idx] = Idle
 	}
@@ -123,7 +123,7 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
 	if len(m.TaskQueue) > 0 {
 		log.Println("4. master给worker分配map任务")
 		reply = <- m.TaskQueue
-		m.TaskStatus[reply.MapTaskNumber] = InProgress
+		m.TaskStatus[reply.TaskNumber] = InProgress
 		return nil
 	}
 	if m.Phase == Done {
@@ -139,9 +139,8 @@ func (m *Master) TaskCompleted(task *TaskMeta, reply *ExampleReply) error {
 	switch task.State {
 	case MapTask:
 		log.Println("9.1 master 收到map的结果")
-		m.TaskStatus[task.MapTaskNumber] = Completed
+		m.TaskStatus[task.TaskNumber] = Completed
 		m.TaskCollections = append(m.TaskCollections, task)
-		
 	}
 
 }

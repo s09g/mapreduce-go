@@ -26,7 +26,7 @@ type TaskMeta struct {
 	Filename      string
 	State         TaskState
 	NReducer      int
-	MapTaskNumber int
+	TaskNumber    int
 	Intermediates []string
 }
 
