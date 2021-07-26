@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"errors"
 	"log"
 )
 import "net"
@@ -175,6 +176,16 @@ func (m *Master) TaskCompleted(task *TaskMeta, reply *ExampleReply) error {
 			m.createReduceTask()
 			m.Phase = Reduce
 		}
+	case ReduceTask:
+		log.Println("12 master 收到reduce的结果")
+		m.TaskStatus[task.TaskNumber] = Completed
+		m.TaskCollections = append(m.TaskCollections, task)
+		if allTaskDone(m) {
+			log.Println("13 结束reduce阶段")
+			m.Phase = Done
+		}
+	default:
+		return errors.New("no task info")
 	}
 
 }
