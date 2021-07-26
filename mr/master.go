@@ -14,7 +14,7 @@ type MasterPhase int
 const (
 	Map MasterPhase = iota
 	Reduce
-	Done
+	Exit
 )
 
 type Master struct {
@@ -66,11 +66,11 @@ func (m *Master) server() {
 }
 
 //
-// main/mrmaster.go calls Done() periodically to find out
+// main/mrmaster.go calls Exit() periodically to find out
 // if the entire job has finished.
 //
 func (m *Master) Done() bool {
-	ret := m.Phase == Done
+	ret := m.Phase == Exit
 
 	// Your code here.
 
@@ -121,13 +121,14 @@ func (m *Master) createMapTask() {
 }
 
 func (m *Master) createReduceTask() {
+	log.Println("createReduceTask")
 	intermediates := make([][]string, m.NReduce)
 	for _, task := range m.TaskCollections {
 		for reduceTaskNumber, filePath := range task.Intermediates {
 			intermediates[reduceTaskNumber] = append(intermediates[reduceTaskNumber], filePath)
 		}
 	}
-
+	log.Println("update master")
 	m.TaskStatus = make(map[int]MasterTaskStatus)
 	for idx, files := range intermediates {
 		m.TaskQueue <- &TaskMeta{
@@ -151,16 +152,14 @@ func max(a int, b int) int {
 // 4. master等待worker 调用
 func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
 	if len(m.TaskQueue) > 0 {
-		log.Println("4. master给worker分配map任务")
-		reply = <- m.TaskQueue
+		log.Println("4. master给worker分配任务")
+		*reply = *<- m.TaskQueue
 		m.TaskStatus[reply.TaskNumber] = InProgress
-		return nil
+	} else if m.Phase == Exit {
+		*reply = TaskMeta{State: NoTask,}
+	} else {
+		*reply = TaskMeta{State: WaitTask,}
 	}
-	if m.Phase == Done {
-		reply = &TaskMeta{State: NoTask,}
-		return nil
-	}
-	reply = &TaskMeta{State: WaitTask,}
 	return nil
 }
 
@@ -182,17 +181,17 @@ func (m *Master) TaskCompleted(task *TaskMeta, reply *ExampleReply) error {
 		m.TaskCollections = append(m.TaskCollections, task)
 		if allTaskDone(m) {
 			log.Println("13 结束reduce阶段")
-			m.Phase = Done
+			m.Phase = Exit
 		}
 	default:
 		return errors.New("no task info")
 	}
-
+	return nil
 }
 
 func allTaskDone(m *Master) bool {
-	for _, task := range m.TaskCollections {
-		if m.TaskStatus[task.TaskNumber] != Completed {
+	for _, status := range m.TaskStatus {
+		if status != Completed {
 			return false
 		}
 	}
