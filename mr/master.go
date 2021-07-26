@@ -116,8 +116,9 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *TaskMeta) error {
 		log.Println("4. master给worker分配map任务")
 		reply = <- m.TaskQueue
 		m.TaskStatus[reply.MapTaskNumber] = InProgress
+	} else {
+		reply = &TaskMeta{State: NoTask,}
 	}
-
 	return nil
 }
 
