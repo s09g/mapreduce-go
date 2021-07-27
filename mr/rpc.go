@@ -8,8 +8,8 @@ package mr
 
 import (
 	"os"
+	"strconv"
 )
-import "strconv"
 
 //
 // example to show how to declare the arguments
@@ -30,7 +30,7 @@ type Task struct {
 	NReducer      int
 	TaskNumber    int
 	Intermediates []string
-	Output 		  string
+	Output        string
 }
 
 type TaskState int
@@ -43,7 +43,6 @@ const (
 )
 
 // Add your RPC definitions here.
-
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the master.
