@@ -1,5 +1,9 @@
 # mapreduce
 
+MIT 6.824 (2020 Fall) Lab1
+
+Lab code has changed in the new semester. Here is the old version. Don't copy my answer.
+
 ```bash
 $ ./test-mr.sh        
 *** Starting wc test.
@@ -15,7 +19,7 @@ $ ./test-mr.sh
 *** PASSED ALL TESTS
 ```
 
-如果你看见下面的log，说明你用了新的Go版本，而不是1.13
+If you saw the following log when running test，it means you're using a new version of Go instead of 1.13
 ```bash
 rpc.Register: method "Done" has 1 input parameters; needs exactly three
 ```
