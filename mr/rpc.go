@@ -54,11 +54,3 @@ func masterSock() string {
 	s += strconv.Itoa(os.Getuid())
 	return s
 }
-
-func Println(v ...interface{}) {
-	//fmt.Println(v...)
-}
-
-func Printf(format string, v ...interface{}) {
-	//fmt.Printf(format, v...)
-}
