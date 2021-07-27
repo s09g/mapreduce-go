@@ -59,9 +59,10 @@ func Worker(mapf func(string, string) []KeyValue,
 			reducer(&task, reducef)
 			TaskCompleted(&task)
 		case WaitTask:
-			Println("sleep and waiting")
+			Println("worker: sleep and waiting")
 			time.Sleep(5 * time.Second)
 		case NoTask:
+			Println("worker: Exit")
 			return
 		default:
 			return
@@ -78,13 +79,12 @@ func reducer(task *Task, reducef func(string, []string) string) {
 	intermediate := *readFromLocalFile(task.Intermediates)
 	sort.Sort(ByKey(intermediate))
 
-	oname := fmt.Sprintf("mr-out-%d", task.TaskNumber)
-	ofile, _ := os.Create(oname)
+	dir, _ := os.Getwd()
+	tempFile, err := ioutil.TempFile(dir, "mr-tmp-*")
+	if err != nil {
+		log.Fatal("Fail to create temp file", err)
+	}
 
-	//
-	// call Reduce on each distinct key in intermediate[],
-	// and print the result to mr-out-0.
-	//
 	i := 0
 	for i < len(intermediate) {
 		j := i + 1
@@ -98,12 +98,13 @@ func reducer(task *Task, reducef func(string, []string) string) {
 		output := reducef(intermediate[i].Key, values)
 
 		// this is the correct format for each line of Reduce output.
-		fmt.Fprintf(ofile, "%v %v\n", intermediate[i].Key, output)
+		fmt.Fprintf(tempFile, "%v %v\n", intermediate[i].Key, output)
 
 		i = j
 	}
-
-	ofile.Close()
+	tempFile.Close()
+	oname := fmt.Sprintf("mr-out-%d", task.TaskNumber)
+	os.Rename(tempFile.Name(), oname)
 	task.Output = oname
 }
 
@@ -151,9 +152,9 @@ func writeToLocalFile(x int, y int, kvs *[]KeyValue) string {
 			log.Fatal("fail to write kv pair", err)
 		}
 	}
+	tempFile.Close()
 	outputName := fmt.Sprintf("mr-%d-%d", x, y)
 	os.Rename(tempFile.Name(), outputName)
-	tempFile.Close()
 	return filepath.Join(dir, outputName)
 }
 

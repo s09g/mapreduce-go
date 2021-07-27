@@ -22,3 +22,4 @@ mr-tmp/
 mrmaster
 mrsequential
 mrworker
+mr-*

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -42,6 +43,7 @@ const (
 	Completed
 )
 
+var mu sync.Mutex
 // Your code here -- RPC handlers for the worker to call.
 
 //
@@ -75,8 +77,9 @@ func (m *Master) server() {
 // if the entire job has finished.
 //
 func (m *Master) Done() bool {
+	mu.Lock()
 	ret := m.Phase == Exit
-
+	mu.Unlock()
 	// Your code here.
 
 	return ret
@@ -114,16 +117,21 @@ func MakeMaster(files []string, nReduce int) *Master {
 
 func (m *Master) catchTimeOut() {
 	for {
-		time.Sleep(time.Minute)
+		time.Sleep(5 * time.Second)
+		mu.Lock()
+		Println("catchTimeOut Lock!")
 		if m.Phase == Exit {
 			return
 		}
 		for _, masterTask := range m.TaskMeta {
-			if masterTask.TaskStatus == InProgress && time.Now().Sub(masterTask.StartTime) > time.Minute {
+			if masterTask.TaskStatus == InProgress && time.Now().Sub(masterTask.StartTime) > 10 * time.Second {
+				Printf("task timeout %v\n", masterTask)
 				m.TaskQueue <- masterTask.TaskReference
 				masterTask.TaskStatus = Idle
 			}
 		}
+		Println("catchTimeOut unLock!")
+		mu.Unlock()
 	}
 }
 
@@ -145,8 +153,11 @@ func (m *Master) createMapTask() {
 
 func (m *Master) createReduceTask() {
 	Println("createReduceTask")
-
+	mu.Lock()
+	Println("createReduceTask()  Lock!")
 	m.TaskMeta = make(map[int]*MasterTask)
+	Println("createReduceTask() UnLock!")
+	mu.Unlock()
 	for idx, files := range m.Intermediates {
 		taskMeta := Task{
 			State:         ReduceTask,
@@ -174,8 +185,14 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *Task) error {
 	if len(m.TaskQueue) > 0 {
 		Println("4. master给worker分配任务")
 		*reply = *<-m.TaskQueue
+		mu.Lock()
+		Println("AssignTask Lock!")
+
 		m.TaskMeta[reply.TaskNumber].TaskStatus = InProgress
 		m.TaskMeta[reply.TaskNumber].StartTime = time.Now()
+		Println("AssignTask UnLock!")
+
+		mu.Unlock()
 	} else if m.Phase == Exit {
 		*reply = Task{State: NoTask}
 	} else {
@@ -185,12 +202,20 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *Task) error {
 }
 
 func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
-	Println("收到completed task")
-	if m.TaskMeta[task.TaskNumber].TaskStatus == Completed {
-		Println("straggler: already have results from primary job, discard backup job output")
-		return nil
+	{
+		mu.Lock()
+		Println("TaskCompleted Lock!")
+		Println("收到completed task")
+		if m.TaskMeta[task.TaskNumber].TaskStatus == Completed {
+			Println("straggler: already have results from primary job, discard backup job output")
+			Println("Unlock")
+			mu.Unlock()
+			return nil
+		}
+		m.TaskMeta[task.TaskNumber].TaskStatus = Completed
+		Println("TaskCompleted Unlock")
+		mu.Unlock()
 	}
-	m.TaskMeta[task.TaskNumber].TaskStatus = Completed
 
 	switch task.State {
 	case MapTask:
@@ -203,13 +228,21 @@ func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 		if allTaskDone(m) {
 			Println("9.2 结束Map阶段 进入reduce阶段")
 			m.createReduceTask()
+			mu.Lock()
+			Println("TaskCompleted Lock!")
+			defer mu.Unlock()
 			m.Phase = Reduce
+			Println("TaskCompleted UnLock!")
 		}
 	case ReduceTask:
 		Println("12 master 收到reduce的结果")
 		if allTaskDone(m) {
 			Println("13 结束reduce阶段")
+			mu.Lock()
+			Println("TaskCompleted Lock!")
+			defer mu.Unlock()
 			m.Phase = Exit
+			Println("TaskCompleted UnLock!")
 		}
 	default:
 		return errors.New("no task info")
@@ -218,10 +251,16 @@ func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 }
 
 func allTaskDone(m *Master) bool {
+	mu.Lock()
+	Println("allTaskDone Lock!")
+	defer mu.Unlock()
 	for _, task := range m.TaskMeta {
 		if task.TaskStatus != Completed {
+			Println("not allTask Done UnLock!")
 			return false
 		}
 	}
+	Println("allTaskDone UnLock!")
+
 	return true
 }
