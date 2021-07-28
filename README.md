@@ -1,6 +1,6 @@
 # mapreduce
 
-MIT 6.824 (2020 Fall) Lab1
+MIT 6.824 (2020 Spring) Lab1
 
 Lab code has changed in the new semester. Here is the old version. Don't copy my answer.
 
