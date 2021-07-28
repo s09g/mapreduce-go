@@ -41,6 +41,7 @@ type MasterTask struct {
 	StartTime     time.Time
 	TaskReference *Task
 }
+
 type Task struct {
 	Input         string
 	State         TaskState
@@ -102,8 +103,6 @@ func MakeMaster(files []string, nReduce int) *Master {
 		InputFiles:    files,
 		Intermediates: make([][]string, nReduce),
 	}
-
-	// Your code here.
 
 	// 切成16MB-64MB的文件，GFS负责这一步
 	// 创建map任务
@@ -215,7 +214,7 @@ func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 		for reduceTaskId, filePath := range task.Intermediates {
 			m.Intermediates[reduceTaskId] = append(m.Intermediates[reduceTaskId], filePath)
 		}
-		if allTaskDone(m) {
+		if m.allTaskDone() {
 			//获得所以map task后，进入reduce阶段
 			m.createReduceTask()
 			mu.Lock()
@@ -223,7 +222,7 @@ func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 			m.Phase = Reduce
 		}
 	case ReduceTask:
-		if allTaskDone(m) {
+		if m.allTaskDone() {
 			//获得所以reduce task后，进入exit阶段
 			mu.Lock()
 			defer mu.Unlock()
@@ -235,7 +234,7 @@ func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 	return nil
 }
 
-func allTaskDone(m *Master) bool {
+func (m *Master) allTaskDone() bool {
 	mu.Lock()
 	defer mu.Unlock()
 	for _, task := range m.TaskMeta {
