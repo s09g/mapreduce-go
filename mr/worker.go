@@ -45,20 +45,18 @@ func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
-	// 4. 启动worker
+	// 启动worker
 	for {
-		// 5. worker从master获取任务
+		// worker从master获取任务
 		task := getTask()
 
-		// 6. 拿到task之后，根据task的state，map task交给mapper， reduce task交给reducer
+		// 拿到task之后，根据task的state，map task交给mapper， reduce task交给reducer
 		// 额外加两个state，让 worker 等待 或者 直接退出
 		switch task.State {
 		case MapTask:
 			mapper(&task, mapf)
-			TaskCompleted(&task)
 		case ReduceTask:
 			reducer(&task, reducef)
-			TaskCompleted(&task)
 		case WaitTask:
 			time.Sleep(5 * time.Second)
 		case NoTask:
@@ -102,6 +100,7 @@ func reducer(task *Task, reducef func(string, []string) string) {
 	oname := fmt.Sprintf("mr-out-%d", task.TaskNumber)
 	os.Rename(tempFile.Name(), oname)
 	task.Output = oname
+	TaskCompleted(task)
 }
 
 func mapper(task *Task, mapf func(string, string) []KeyValue) {
@@ -126,6 +125,15 @@ func mapper(task *Task, mapf func(string, string) []KeyValue) {
 	}
 	//R个文件的位置发送给master
 	task.Intermediates = mapOutput
+	TaskCompleted(task)
+}
+
+func getTask() Task {
+	// worker从master获取任务
+	args := ExampleArgs{}
+	reply := Task{}
+	call("Master.AssignTask", &args, &reply)
+	return reply
 }
 
 func TaskCompleted(task *Task) {
@@ -170,15 +178,6 @@ func readFromLocalFile(files []string) *[]KeyValue {
 		file.Close()
 	}
 	return &kva
-}
-
-
-func getTask() Task {
-	// 5. worker从master获取任务
-	args := ExampleArgs{}
-	reply := Task{}
-	call("Master.AssignTask", &args, &reply)
-	return reply
 }
 
 //

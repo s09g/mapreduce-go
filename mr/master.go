@@ -11,6 +11,14 @@ import (
 	"time"
 )
 
+type MasterTaskStatus int
+
+const (
+	Idle MasterTaskStatus = iota
+	InProgress
+	Completed
+)
+
 type MasterPhase int
 
 const (
@@ -20,13 +28,12 @@ const (
 )
 
 type Master struct {
-	// Your definitions here.
-	TaskQueue     chan *Task
-	TaskMeta      map[int]*MasterTask
-	Phase         MasterPhase
+	TaskQueue     chan *Task // 等待执行的task
+	TaskMeta      map[int]*MasterTask // 当前所有task的信息
+	Phase         MasterPhase // Master的阶段
 	NReduce       int
 	InputFiles    []string
-	Intermediates [][]string
+	Intermediates [][]string // Map任务产生的R个中间文件的信息
 }
 
 type MasterTask struct {
@@ -34,13 +41,22 @@ type MasterTask struct {
 	StartTime     time.Time
 	TaskReference *Task
 }
+type Task struct {
+	Input         string
+	State         TaskState
+	NReducer      int
+	TaskNumber    int
+	Intermediates []string
+	Output        string
+}
 
-type MasterTaskStatus int
+type TaskState int
 
 const (
-	Idle MasterTaskStatus = iota
-	InProgress
-	Completed
+	MapTask TaskState = iota
+	ReduceTask
+	WaitTask
+	NoTask
 )
 
 var mu sync.Mutex
@@ -89,11 +105,11 @@ func MakeMaster(files []string, nReduce int) *Master {
 
 	// Your code here.
 
-	// 1. 切成16MB-64MB的文件，GFS负责这一步
-	// 2. 创建map任务
+	// 切成16MB-64MB的文件，GFS负责这一步
+	// 创建map任务
 	m.createMapTask()
 
-	// 3. 一个程序成为master，其他成为worker
+	// 一个程序成为master，其他成为worker
 	//这里就是启动master 服务器就行了，
 	//拥有master代码的就是master，别的发RPC过来的都是worker
 	m.server()
@@ -162,7 +178,7 @@ func max(a int, b int) int {
 	return b
 }
 
-// 4. master等待worker调用
+// master等待worker调用
 func (m *Master) AssignTask(args *ExampleArgs, reply *Task) error {
 	// assignTask就看看自己queue里面还有没有task
 	if len(m.TaskQueue) > 0 {

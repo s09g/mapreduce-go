@@ -24,24 +24,6 @@ type ExampleReply struct {
 	Y int
 }
 
-type Task struct {
-	Input         string
-	State         TaskState
-	NReducer      int
-	TaskNumber    int
-	Intermediates []string
-	Output        string
-}
-
-type TaskState int
-
-const (
-	MapTask TaskState = iota
-	ReduceTask
-	WaitTask
-	NoTask
-)
-
 // Add your RPC definitions here.
 
 // Cook up a unique-ish UNIX-domain socket name
