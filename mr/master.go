@@ -113,7 +113,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 	//这里就是启动master 服务器就行了，
 	//拥有master代码的就是master，别的发RPC过来的都是worker
 	m.server()
-	//
+	// 启动一个goroutine 检查超时的任务
 	go m.catchTimeOut()
 	return &m
 }
