@@ -78,7 +78,7 @@ func reducer(task *Task, reducef func(string, []string) string) {
 	if err != nil {
 		log.Fatal("Fail to create temp file", err)
 	}
-
+	// 这部分代码修改自mrsequential.go
 	i := 0
 	for i < len(intermediate) {
 		//将相同的key放在一起分组合并
