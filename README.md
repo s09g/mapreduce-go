@@ -354,12 +354,10 @@ func (m *Master) Done() bool {
 }
 ```
 
-
 **10. 上锁**
-master跟多个worker通信，master的数据是共享的，其中`TaskMeta, Phase, Intermediates, TaskQueue` 都有读写发生。`TaskQueue`使用`channel`实现，自己带锁。`Intermediates`写操作发生在在map阶段，读操作发生在reduce阶段读，逻辑上存在`barrier`，所以不会有datarace.
+master跟多个worker通信，master的数据是共享的，其中`TaskMeta, Phase, Intermediates, TaskQueue` 都有读写发生。`TaskQueue`使用`channel`实现，自己带锁。只有涉及`Intermediates, TaskMeta, Phase`的操作需要上锁。*PS.写的糙一点，那就是master每个方法都要上锁，master直接变成同步执行。。。*
 
-只有涉及`TaskMeta, Phase`的操作需要上锁。*PS.写的糙一点，那就是master每个方法都要上锁，master直接变成同步执行。。。*
-
+另外go -race并不能检测出所有的datarace。我曾一度任务`Intermediates`写操作发生在map阶段，读操作发生在reduce阶段读，逻辑上存在`barrier`，所以不会有datarace. 但是后来想到两个write也可能造成datarace，然而Go Race Detector并没有检测出来。
 
 **11. carsh处理**
 
