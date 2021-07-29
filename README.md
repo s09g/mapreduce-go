@@ -38,22 +38,13 @@ Reduce worker在排序后的数据上迭代，将中间<k, v> 交给reduce 函�
 
 所有map和reduce任务结束后，master唤醒用户程序
 
-## MapReduce的实现
+---
 
+## MapReduce的实现
 
 ### Master的数据结构设计
 
-这一部分对论文的3.2节有所改动，相比于原论文有所简化。我将Master划分为`Map->Reduce->Exit`三个阶段，每个阶段之间逻辑上存在`barrier`。
-
-```go
-type MasterPhase int
-
-const (
-	Map MasterPhase = iota
-	Reduce
-	Exit
-)
-```
+这一部分对论文的3.2节有所改动，相比于原论文有所简化。
 
 论文提到每个(Map或者Reduce)Task有分为idle, in-progress, completed 三种状态。
 
@@ -81,9 +72,9 @@ type MasterTask struct {
 
 ```go
 type Master struct {
-	TaskQueue     chan *Task // 等待执行的task
+	TaskQueue     chan *Task          // 等待执行的task
 	TaskMeta      map[int]*MasterTask // 当前所有task的信息
-	Phase         MasterPhase // Master的阶段
+	MasterPhase   State               // Master的阶段
 	NReduce       int
 	InputFiles    []string
 	Intermediates [][]string // Map任务产生的R个中间文件的信息
@@ -94,20 +85,24 @@ Map和Reduce的Task应该负责不同的事情，但是在实现代码的过程�
 ```go
 type Task struct {
 	Input         string
-	State         TaskState
+	TaskState     State
 	NReducer      int
 	TaskNumber    int
 	Intermediates []string
 	Output        string
 }
+```
 
-type TaskState int
+此外我将task和master的状态合并成一个State。task和master的状态应该一致。如果在Reduce阶段收到了迟来MapTask结果，应该直接丢弃。
+
+```go
+type State int
 
 const (
-	MapTask TaskState = iota
-	ReduceTask
-	WaitTask
-	NoTask
+	Map State = iota
+	Reduce
+	Exit
+	Wait
 )
 ```
 
@@ -120,13 +115,13 @@ func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{
 		TaskQueue:     make(chan *Task, max(nReduce, len(files))),
 		TaskMeta:      make(map[int]*MasterTask),
-		Phase:         Map,
+		MasterPhase:   Map,
 		NReduce:       nReduce,
 		InputFiles:    files,
 		Intermediates: make([][]string, nReduce),
 	}
 
-	// 切成16MB-64MB的文件，GFS负责这一步
+	// 切成16MB-64MB的文件
 	// 创建map任务
 	m.createMapTask()
 
@@ -146,30 +141,29 @@ func MakeMaster(files []string, nReduce int) *Master {
 // master等待worker调用
 func (m *Master) AssignTask(args *ExampleArgs, reply *Task) error {
 	// assignTask就看看自己queue里面还有没有task
+	mu.Lock()
+	defer mu.Unlock()
 	if len(m.TaskQueue) > 0 {
 		//有就发出去
 		*reply = *<-m.TaskQueue
-		mu.Lock()
 		// 记录task的启动时间
 		m.TaskMeta[reply.TaskNumber].TaskStatus = InProgress
 		m.TaskMeta[reply.TaskNumber].StartTime = time.Now()
-		mu.Unlock()
-	} else if m.Phase == Exit {
-		*reply = Task{State: NoTask}
+	} else if m.MasterPhase == Exit {
+		*reply = Task{TaskState: Exit}
 	} else {
 		// 没有task就让worker 等待
-		*reply = Task{State: WaitTask}
+		*reply = Task{TaskState: Wait}
 	}
 	return nil
 }
-
 ```
 
 **3. 启动worker**
 
 ```go
-func Worker(mapf func(string, string) []KeyValue,
-	          reducef func(string, []string) string) {
+func Worker(mapf func(string, string) []KeyValue, 
+            reducef func(string, []string) string) {
 	// 启动worker
 	for {
 		// worker从master获取任务
@@ -177,16 +171,14 @@ func Worker(mapf func(string, string) []KeyValue,
 
 		// 拿到task之后，根据task的state，map task交给mapper， reduce task交给reducer
 		// 额外加两个state，让 worker 等待 或者 直接退出
-		switch task.State {
-		case MapTask:
+		switch task.TaskState {
+		case Map:
 			mapper(&task, mapf)
-		case ReduceTask:
+		case Reduce:
 			reducer(&task, reducef)
-		case WaitTask:
+		case Wait:
 			time.Sleep(5 * time.Second)
-		case NoTask:
-			return
-		default:
+		case Exit:
 			return
 		}
 	}
@@ -253,16 +245,21 @@ func TaskCompleted(task *Task) {
 func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 	//更新task状态
 	mu.Lock()
-	if m.TaskMeta[task.TaskNumber].TaskStatus == Completed {
+	if task.TaskState != m.MasterPhase || m.TaskMeta[task.TaskNumber].TaskStatus == Completed {
 		// 因为worker写在同一个文件磁盘上，对于重复的结果要丢弃
-		mu.Unlock()
 		return nil
 	}
 	m.TaskMeta[task.TaskNumber].TaskStatus = Completed
 	mu.Unlock()
+	defer m.processTaskResult(task)
+	return nil
+}
 
-	switch task.State {
-	case MapTask:
+func (m *Master) processTaskResult(task *Task)  {
+	mu.Lock()
+	defer mu.Unlock()
+	switch task.TaskState {
+	case Map:
 		//收集intermediate信息
 		for reduceTaskId, filePath := range task.Intermediates {
 			m.Intermediates[reduceTaskId] = append(m.Intermediates[reduceTaskId], filePath)
@@ -270,21 +267,14 @@ func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 		if m.allTaskDone() {
 			//获得所以map task后，进入reduce阶段
 			m.createReduceTask()
-			mu.Lock()
-			defer mu.Unlock()
-			m.Phase = Reduce
+			m.MasterPhase = Reduce
 		}
-	case ReduceTask:
+	case Reduce:
 		if m.allTaskDone() {
 			//获得所以reduce task后，进入exit阶段
-			mu.Lock()
-			defer mu.Unlock()
-			m.Phase = Exit
+			m.MasterPhase = Exit
 		}
-	default:
-		return errors.New("no task info")
 	}
-	return nil
 }
 ```
 
@@ -292,8 +282,6 @@ func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 
 ```go
 func (m *Master) allTaskDone() bool {
-	mu.Lock()
-	defer mu.Unlock()
 	for _, task := range m.TaskMeta {
 		if task.TaskStatus != Completed {
 			return false
@@ -348,16 +336,18 @@ func reducer(task *Task, reducef func(string, []string) string) {
 ```go
 func (m *Master) Done() bool {
 	mu.Lock()
-	ret := m.Phase == Exit
-	mu.Unlock()
+	defer mu.Unlock()
+	ret := m.MasterPhase == Exit
 	return ret
 }
 ```
+
 
 **10. 上锁**
 master跟多个worker通信，master的数据是共享的，其中`TaskMeta, Phase, Intermediates, TaskQueue` 都有读写发生。`TaskQueue`使用`channel`实现，自己带锁。只有涉及`Intermediates, TaskMeta, Phase`的操作需要上锁。*PS.写的糙一点，那就是master每个方法都要上锁，master直接变成同步执行。。。*
 
 另外go -race并不能检测出所有的datarace。我曾一度任务`Intermediates`写操作发生在map阶段，读操作发生在reduce阶段读，逻辑上存在`barrier`，所以不会有datarace. 但是后来想到两个write也可能造成datarace，然而Go Race Detector并没有检测出来。
+
 
 **11. carsh处理**
 
@@ -366,9 +356,9 @@ test当中有容错的要求，不过只针对worker。mapreduce论文中提到�
 1. 周期性向worker发送心跳检测
 + 如果worker失联一段时间，master将worker标记成failed
 + worker失效之后
-    + 已完成的map task被重新标记为idle
-    + 已完成的reduce task不需要改变
-    + 原因是：map的结果被写在local disk，worker machine 宕机会导致map的结果丢失；reduce结果存储在GFS，不会随着machine down丢失
+  + 已完成的map task被重新标记为idle
+  + 已完成的reduce task不需要改变
+  + 原因是：map的结果被写在local disk，worker machine 宕机会导致map的结果丢失；reduce结果存储在GFS，不会随着machine down丢失
 2. 对于in-progress 且超时的任务，启动backup执行
 
 
@@ -383,7 +373,8 @@ func (m *Master) catchTimeOut() {
 	for {
 		time.Sleep(5 * time.Second)
 		mu.Lock()
-		if m.Phase == Exit {
+		if m.MasterPhase == Exit {
+			mu.Unlock()
 			return
 		}
 		for _, masterTask := range m.TaskMeta {
@@ -400,15 +391,11 @@ func (m *Master) catchTimeOut() {
 2. 从第一个完成的worker获取结果，将后序的backup结果丢弃
 
 ```go
-//更新task状态
-mu.Lock()
-if m.TaskMeta[task.TaskNumber].TaskStatus == Completed {
+if task.TaskState != m.MasterPhase || m.TaskMeta[task.TaskNumber].TaskStatus == Completed {
 	// 因为worker写在同一个文件磁盘上，对于重复的结果要丢弃
-	mu.Unlock()
 	return nil
 }
 m.TaskMeta[task.TaskNumber].TaskStatus = Completed
-mu.Unlock()
 ```
 
 ---
