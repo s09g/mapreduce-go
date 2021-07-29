@@ -19,18 +19,19 @@ const (
 	Completed
 )
 
-type MasterPhase int
+type State int
 
 const (
-	Map MasterPhase = iota
+	Map State = iota
 	Reduce
 	Exit
+	Wait
 )
 
 type Master struct {
-	TaskQueue     chan *Task // 等待执行的task
+	TaskQueue     chan *Task          // 等待执行的task
 	TaskMeta      map[int]*MasterTask // 当前所有task的信息
-	Phase         MasterPhase // Master的阶段
+	MasterPhase   State               // Master的阶段
 	NReduce       int
 	InputFiles    []string
 	Intermediates [][]string // Map任务产生的R个中间文件的信息
@@ -44,21 +45,12 @@ type MasterTask struct {
 
 type Task struct {
 	Input         string
-	State         TaskState
+	TaskState     State
 	NReducer      int
 	TaskNumber    int
 	Intermediates []string
 	Output        string
 }
-
-type TaskState int
-
-const (
-	MapTask TaskState = iota
-	ReduceTask
-	WaitTask
-	NoTask
-)
 
 var mu sync.Mutex
 
@@ -84,7 +76,7 @@ func (m *Master) server() {
 //
 func (m *Master) Done() bool {
 	mu.Lock()
-	ret := m.Phase == Exit
+	ret := m.MasterPhase == Exit
 	mu.Unlock()
 	return ret
 }
@@ -98,7 +90,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{
 		TaskQueue:     make(chan *Task, max(nReduce, len(files))),
 		TaskMeta:      make(map[int]*MasterTask),
-		Phase:         Map,
+		MasterPhase:   Map,
 		NReduce:       nReduce,
 		InputFiles:    files,
 		Intermediates: make([][]string, nReduce),
@@ -121,7 +113,7 @@ func (m *Master) catchTimeOut() {
 	for {
 		time.Sleep(5 * time.Second)
 		mu.Lock()
-		if m.Phase == Exit {
+		if m.MasterPhase == Exit {
 			return
 		}
 		for _, masterTask := range m.TaskMeta {
@@ -139,7 +131,7 @@ func (m *Master) createMapTask() {
 	for idx, filename := range m.InputFiles {
 		taskMeta := Task{
 			Input:      filename,
-			State:      MapTask,
+			TaskState:  Map,
 			NReducer:   m.NReduce,
 			TaskNumber: idx,
 		}
@@ -157,7 +149,7 @@ func (m *Master) createReduceTask() {
 	mu.Unlock()
 	for idx, files := range m.Intermediates {
 		taskMeta := Task{
-			State:         ReduceTask,
+			TaskState:     Reduce,
 			NReducer:      m.NReduce,
 			TaskNumber:    idx,
 			Intermediates: files,
@@ -188,11 +180,11 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *Task) error {
 		m.TaskMeta[reply.TaskNumber].TaskStatus = InProgress
 		m.TaskMeta[reply.TaskNumber].StartTime = time.Now()
 		mu.Unlock()
-	} else if m.Phase == Exit {
-		*reply = Task{State: NoTask}
+	} else if m.MasterPhase == Exit {
+		*reply = Task{TaskState: Exit}
 	} else {
 		// 没有task就让worker 等待
-		*reply = Task{State: WaitTask}
+		*reply = Task{TaskState: Wait}
 	}
 	return nil
 }
@@ -200,7 +192,7 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *Task) error {
 func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 	//更新task状态
 	mu.Lock()
-	if m.TaskMeta[task.TaskNumber].TaskStatus == Completed {
+	if task.TaskState == m.MasterPhase && m.TaskMeta[task.TaskNumber].TaskStatus == Completed {
 		// 因为worker写在同一个文件磁盘上，对于重复的结果要丢弃
 		mu.Unlock()
 		return nil
@@ -208,8 +200,8 @@ func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 	m.TaskMeta[task.TaskNumber].TaskStatus = Completed
 	mu.Unlock()
 
-	switch task.State {
-	case MapTask:
+	switch task.TaskState {
+	case Map:
 		//收集intermediate信息
 		for reduceTaskId, filePath := range task.Intermediates {
 			m.Intermediates[reduceTaskId] = append(m.Intermediates[reduceTaskId], filePath)
@@ -219,14 +211,14 @@ func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 			m.createReduceTask()
 			mu.Lock()
 			defer mu.Unlock()
-			m.Phase = Reduce
+			m.MasterPhase = Reduce
 		}
-	case ReduceTask:
+	case Reduce:
 		if m.allTaskDone() {
 			//获得所以reduce task后，进入exit阶段
 			mu.Lock()
 			defer mu.Unlock()
-			m.Phase = Exit
+			m.MasterPhase = Exit
 		}
 	default:
 		return errors.New("no task info")

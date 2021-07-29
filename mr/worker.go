@@ -52,14 +52,14 @@ func Worker(mapf func(string, string) []KeyValue,
 
 		// 拿到task之后，根据task的state，map task交给mapper， reduce task交给reducer
 		// 额外加两个state，让 worker 等待 或者 直接退出
-		switch task.State {
-		case MapTask:
+		switch task.TaskState {
+		case Map:
 			mapper(&task, mapf)
-		case ReduceTask:
+		case Reduce:
 			reducer(&task, reducef)
-		case WaitTask:
+		case Wait:
 			time.Sleep(5 * time.Second)
-		case NoTask:
+		case Exit:
 			return
 		default:
 			return
