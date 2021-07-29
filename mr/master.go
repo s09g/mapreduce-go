@@ -1,7 +1,6 @@
 package mr
 
 import (
-	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -76,8 +75,8 @@ func (m *Master) server() {
 //
 func (m *Master) Done() bool {
 	mu.Lock()
+	defer mu.Unlock()
 	ret := m.MasterPhase == Exit
-	mu.Unlock()
 	return ret
 }
 
@@ -96,7 +95,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 		Intermediates: make([][]string, nReduce),
 	}
 
-	// 切成16MB-64MB的文件，GFS负责这一步
+	// 切成16MB-64MB的文件
 	// 创建map任务
 	m.createMapTask()
 
@@ -144,9 +143,7 @@ func (m *Master) createMapTask() {
 }
 
 func (m *Master) createReduceTask() {
-	mu.Lock()
 	m.TaskMeta = make(map[int]*MasterTask)
-	mu.Unlock()
 	for idx, files := range m.Intermediates {
 		taskMeta := Task{
 			TaskState:     Reduce,
@@ -172,14 +169,14 @@ func max(a int, b int) int {
 // master等待worker调用
 func (m *Master) AssignTask(args *ExampleArgs, reply *Task) error {
 	// assignTask就看看自己queue里面还有没有task
+	mu.Lock()
+	defer mu.Unlock()
 	if len(m.TaskQueue) > 0 {
 		//有就发出去
 		*reply = *<-m.TaskQueue
-		mu.Lock()
 		// 记录task的启动时间
 		m.TaskMeta[reply.TaskNumber].TaskStatus = InProgress
 		m.TaskMeta[reply.TaskNumber].StartTime = time.Now()
-		mu.Unlock()
 	} else if m.MasterPhase == Exit {
 		*reply = Task{TaskState: Exit}
 	} else {
@@ -192,14 +189,19 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *Task) error {
 func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 	//更新task状态
 	mu.Lock()
-	if task.TaskState == m.MasterPhase && m.TaskMeta[task.TaskNumber].TaskStatus == Completed {
+	defer mu.Unlock()
+	if task.TaskState != m.MasterPhase || m.TaskMeta[task.TaskNumber].TaskStatus == Completed {
 		// 因为worker写在同一个文件磁盘上，对于重复的结果要丢弃
-		mu.Unlock()
 		return nil
 	}
 	m.TaskMeta[task.TaskNumber].TaskStatus = Completed
-	mu.Unlock()
+	go m.processTaskResult(task)
+	return nil
+}
 
+func (m *Master) processTaskResult(task *Task)  {
+	mu.Lock()
+	defer mu.Unlock()
 	switch task.TaskState {
 	case Map:
 		//收集intermediate信息
@@ -209,26 +211,17 @@ func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 		if m.allTaskDone() {
 			//获得所以map task后，进入reduce阶段
 			m.createReduceTask()
-			mu.Lock()
-			defer mu.Unlock()
 			m.MasterPhase = Reduce
 		}
 	case Reduce:
 		if m.allTaskDone() {
 			//获得所以reduce task后，进入exit阶段
-			mu.Lock()
-			defer mu.Unlock()
 			m.MasterPhase = Exit
 		}
-	default:
-		return errors.New("no task info")
 	}
-	return nil
 }
 
 func (m *Master) allTaskDone() bool {
-	mu.Lock()
-	defer mu.Unlock()
 	for _, task := range m.TaskMeta {
 		if task.TaskStatus != Completed {
 			return false
