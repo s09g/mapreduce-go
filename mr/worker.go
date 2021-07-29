@@ -42,9 +42,7 @@ func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 //
 // main/mrworker.go calls this function.
 //
-func Worker(mapf func(string, string) []KeyValue,
-	reducef func(string, []string) string) {
-
+func Worker(mapf func(string, string) []KeyValue, reducef func(string, []string) string) {
 	// 启动worker
 	for {
 		// worker从master获取任务
@@ -61,8 +59,6 @@ func Worker(mapf func(string, string) []KeyValue,
 			time.Sleep(5 * time.Second)
 		case Exit:
 			return
-		default:
-			return
 		}
 	}
 }
@@ -76,7 +72,7 @@ func reducer(task *Task, reducef func(string, []string) string) {
 	dir, _ := os.Getwd()
 	tempFile, err := ioutil.TempFile(dir, "mr-tmp-*")
 	if err != nil {
-		log.Fatal("Fail to create temp file", err)
+		log.Fatal("Failed to create temp file", err)
 	}
 	// 这部分代码修改自mrsequential.go
 	i := 0
@@ -107,7 +103,7 @@ func mapper(task *Task, mapf func(string, string) []KeyValue) {
 	//从文件名读取content
 	content, err := ioutil.ReadFile(task.Input)
 	if err != nil {
-		log.Fatal("fail to read file: "+task.Input, err)
+		log.Fatal("Failed to read file: "+task.Input, err)
 	}
 	//将content交给mapf，缓存结果
 	intermediates := mapf(task.Input, string(content))
@@ -146,12 +142,12 @@ func writeToLocalFile(x int, y int, kvs *[]KeyValue) string {
 	dir, _ := os.Getwd()
 	tempFile, err := ioutil.TempFile(dir, "mr-tmp-*")
 	if err != nil {
-		log.Fatal("Fail to create temp file", err)
+		log.Fatal("Failed to create temp file", err)
 	}
 	enc := json.NewEncoder(tempFile)
 	for _, kv := range *kvs {
 		if err := enc.Encode(&kv); err != nil {
-			log.Fatal("fail to write kv pair", err)
+			log.Fatal("Failed to write kv pair", err)
 		}
 	}
 	tempFile.Close()
@@ -165,7 +161,7 @@ func readFromLocalFile(files []string) *[]KeyValue {
 	for _, filepath := range files {
 		file, err := os.Open(filepath)
 		if err != nil {
-			log.Fatal("Fail to open file "+filepath, err)
+			log.Fatal("Failed to open file "+filepath, err)
 		}
 		dec := json.NewDecoder(file)
 		for {
