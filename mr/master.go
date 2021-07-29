@@ -113,6 +113,7 @@ func (m *Master) catchTimeOut() {
 		time.Sleep(5 * time.Second)
 		mu.Lock()
 		if m.MasterPhase == Exit {
+			mu.Unlock()
 			return
 		}
 		for _, masterTask := range m.TaskMeta {
@@ -189,13 +190,13 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *Task) error {
 func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 	//更新task状态
 	mu.Lock()
-	defer mu.Unlock()
 	if task.TaskState != m.MasterPhase || m.TaskMeta[task.TaskNumber].TaskStatus == Completed {
 		// 因为worker写在同一个文件磁盘上，对于重复的结果要丢弃
 		return nil
 	}
 	m.TaskMeta[task.TaskNumber].TaskStatus = Completed
-	go m.processTaskResult(task)
+	mu.Unlock()
+	defer m.processTaskResult(task)
 	return nil
 }
 
