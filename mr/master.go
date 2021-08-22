@@ -190,13 +190,13 @@ func (m *Master) AssignTask(args *ExampleArgs, reply *Task) error {
 func (m *Master) TaskCompleted(task *Task, reply *ExampleReply) error {
 	//更新task状态
 	mu.Lock()
+	defer mu.Unlock()
 	if task.TaskState != m.MasterPhase || m.TaskMeta[task.TaskNumber].TaskStatus == Completed {
 		// 因为worker写在同一个文件磁盘上，对于重复的结果要丢弃
 		return nil
 	}
 	m.TaskMeta[task.TaskNumber].TaskStatus = Completed
-	mu.Unlock()
-	defer m.processTaskResult(task)
+	go m.processTaskResult(task)
 	return nil
 }
 
